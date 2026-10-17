@@ -1,0 +1,20 @@
+﻿{
+  "scenes": [
+    {"segment_ids": ["N01", "N02"], "visual_type": "title", "transition": "fade",
+     "visual_parameters": {"title": "Green Hydrogen", "subtitle": "Fuel from water and sunshine"}},
+    {"segment_ids": ["N03", "N04"], "visual_type": "manim", "transition": "fade",
+     "visual_parameters": {"heading": ""},
+     "manim_template": {"template": "flow_diagram", "title": "Water electrolysis",
+                        "inputs": ["Water", "Wind or solar power"], "center": "Electrolyser",
+                        "outputs": ["Hydrogen", "Oxygen"]}},
+    {"segment_ids": ["N05", "N06"], "visual_type": "key_points", "transition": "slide",
+     "visual_parameters": {"heading": "Where it helps", "points": ["Making steel", "Making fertiliser", "Storing renewable energy", "Fuel cell vehicles"]}},
+    {"segment_ids": ["N07", "N08"], "visual_type": "comparison", "transition": "slide",
+     "visual_parameters": {"heading": "The catch", "leftTitle": "Cost", "rightTitle": "Efficiency",
+                           "leftPoints": ["Costs more than gas-made hydrogen"],
+                           "rightPoints": ["Loses some energy", "Direct electricity is more efficient"]}},
+    {"segment_ids": ["N09"], "visual_type": "end_card", "transition": "zoom",
+     "visual_parameters": {"text": "Clean energy starts with questions", "cta": "Ask your teacher"}}
+  ]
+}
+

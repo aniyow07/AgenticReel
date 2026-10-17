@@ -1,0 +1,19 @@
+@media (max-width: 720px) {
+  .top { padding: 12px 16px; }
+  .model { display: none; }
+  .page { padding: 40px 16px 64px; gap: 32px; }
+  .page.wide { padding-top: 32px; }
+  h1 { font-size: 26px; }
+  .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .tile .desc { display: none; }
+  .grid2 { grid-template-columns: 1fr; }
+  .recent { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .recent a:nth-child(n+4) { display: none; }
+  .frame { flex-basis: 100%; max-width: 280px; }
+  .player { flex-basis: 100%; }
+  .wall { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; }
+  .search { width: 100%; }
+  .lib-head > div:first-child { width: 100%; }
+  .tabs { flex-wrap: nowrap; overflow-x: auto; gap: 20px; scrollbar-width: none; }
+  .tabs button { flex: none; }
+}

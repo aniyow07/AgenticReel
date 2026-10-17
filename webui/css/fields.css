@@ -1,0 +1,22 @@
+/* options */
+.options { display: flex; flex-wrap: wrap; gap: 28px 36px; }
+.field { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.field > .label, .field > label { font-size: 13px; color: var(--muted); }
+.label .opt { color: var(--faint); }
+.seg { display: flex; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 2px; flex-wrap: wrap; }
+.seg button { height: 38px; min-width: 52px; padding: 0 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; background: transparent; color: var(--muted); }
+.seg button:hover { color: var(--text); }
+.seg button[aria-pressed="true"] { background: var(--line); color: var(--text); }
+.input, select.input, textarea.input { height: 44px; padding: 0 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; font-size: 14px; color: var(--text); min-width: 0; }
+.input:focus { border-color: var(--strong); }
+textarea.input { height: auto; padding: 10px 12px; resize: vertical; line-height: 1.5; }
+select.input { min-width: 170px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.check { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14px; color: var(--muted); }
+.check input { width: 16px; height: 16px; accent-color: var(--text); }
+.disclosure { border-top: 1px solid var(--divider); padding-top: 20px; display: flex; flex-direction: column; gap: 16px; }
+.disclosure > button { align-self: flex-start; display: flex; align-items: center; gap: 8px; height: 40px; padding: 0; border: none; background: transparent; color: var(--muted); font-size: 14px; font-weight: 500; }
+.disclosure > button:hover { color: var(--text); }
+.disclosure > button svg { transition: transform .15s; }
+.disclosure > button[aria-expanded="true"] svg { transform: rotate(90deg); }
+.disclosure > button .opt { color: var(--faint); font-weight: 400; }

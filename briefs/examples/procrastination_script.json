@@ -1,0 +1,15 @@
+{
+  "title": "Why We Procrastinate",
+  "words_per_minute": 165,
+  "segments": [
+    {"segment_id": "N01", "beat": "hook", "text": "You sat down to study. Two hours later, you have watched forty videos.", "highlights": ["study"]},
+    {"segment_id": "N02", "beat": "hook", "text": "So why does your brain keep doing this to you?", "highlights": ["brain"]},
+    {"segment_id": "N03", "beat": "core idea", "text": "Here is the twist: procrastination is usually about managing emotions, not managing time.", "fact_ids": ["F002"], "highlights": ["emotions"]},
+    {"segment_id": "N04", "beat": "core idea", "text": "When a task feels boring, confusing or stressful, avoiding it gives you quick relief.", "fact_ids": ["F001"], "highlights": ["relief"]},
+    {"segment_id": "N06", "beat": "fix", "text": "The fix? Make the first step tiny, so starting is easy.", "fact_ids": ["F004"], "highlights": ["tiny"]},
+    {"segment_id": "N07", "beat": "fix", "text": "Open the document. Write one sentence. That is it.", "highlights": ["one"]},
+    {"segment_id": "N08", "beat": "fix", "text": "And when you do slip up, go easy on yourself.", "highlights": ["easy"]},
+    {"segment_id": "N09", "beat": "fix", "text": "Being kind to yourself is linked with procrastinating less next time.", "fact_ids": ["F003"], "highlights": ["kind"]},
+    {"segment_id": "N10", "beat": "takeaway", "text": "So go do that tiny first step. Right now.", "highlights": ["now"]}
+  ]
+}

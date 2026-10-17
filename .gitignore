@@ -1,0 +1,55 @@
+# --- Python ---
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# --- secrets: copy .env.example to .env and fill in your own keys ---
+.env
+.env.*
+!.env.example
+
+# --- generated videos, uploads, trash and logs ---
+outputs/
+logs/
+media/
+*.log
+
+# --- Node / Remotion ---
+node_modules/
+remotion/out/
+remotion/public/jobs/
+
+# --- gameplay footage: large and not verified as licensed for reuse ---
+# setup instructions and provenance live in assets/gameplay_sources.yaml and assets/manifest.csv
+assets/gameplay/**/*.mp4
+assets/gameplay/**/*.webm
+assets/gameplay/**/*.part
+# previews and stills cut from that footage
+assets/ui/preview_minecraft.mp4
+assets/ui/preview_subway.mp4
+assets/ui/thumb_minecraft.jpg
+assets/ui/thumb_subway.jpg
+webui/img/style_minecraft.jpg
+webui/img/style_subway.jpg
+
+# --- music you supply (you need the rights) ---
+assets/music/*
+!assets/music/README.md
+
+# --- personal briefs and documents ---
+briefs/examples/resume_intro.yaml
+*.pdf
+*.docx
+
+# --- local tooling and old UI snapshots ---
+.claude/
+ui_checkpoints/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

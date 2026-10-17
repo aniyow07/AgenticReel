@@ -1,0 +1,14 @@
+/* Design tokens: one monospace face, near-black or near-white, orange only for work in progress. */
+:root {
+  --bg: #0E0F11; --surface: #16171A; --surface2: #1D1F23; --line: #2A2C31; --divider: #222428;
+  --text: #ECECE8; --text2: #D4D4D0; --muted: #9A9DA4; --subtle: #8A8E96; --faint: #6E727A; --strong: #4A4D54;
+  --accent: #FF8A3D; --danger: #FF6B6B; --hover: #FFFFFF;
+  --font: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --bg: #F6F6F3; --surface: #FFFFFF; --surface2: #ECECE8; --line: #D9D9D4; --divider: #E3E3DE;
+  --text: #141518; --text2: #2A2C31; --muted: #55585F; --subtle: #5F626A; --faint: #7A7D84; --strong: #A6A8AD;
+  --accent: #D45A0C; --danger: #C42B2B; --hover: #000000;
+  color-scheme: light;
+}

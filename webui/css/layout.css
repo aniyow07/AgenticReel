@@ -1,0 +1,9 @@
+/* page */
+.page { width: 100%; max-width: 880px; margin: 0 auto; padding: 72px 24px 80px; display: flex; flex-direction: column; gap: 40px; }
+.page.wide { max-width: 1120px; padding-top: 48px; gap: 24px; }
+h1 { margin: 0; font-size: 34px; line-height: 1.15; font-weight: 700; letter-spacing: -0.01em; }
+h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.lead { margin: 0; font-size: 16px; color: var(--muted); line-height: 1.5; }
+.hint { margin: 0; font-size: 13px; color: var(--subtle); line-height: 1.5; }
+.section { display: flex; flex-direction: column; gap: 14px; }
+.row-between { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px; }

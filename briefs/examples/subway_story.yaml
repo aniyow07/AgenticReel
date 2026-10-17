@@ -1,0 +1,14 @@
+id: subway_story
+topic: A night-shift security guard notices the museum's statues have moved
+audience: Teens and young adults
+mode: subway
+duration_s: 45
+tone: suspenseful, playful
+language: English
+subtitle_language: English
+format: video_9x16
+content_type: fictional_story
+must_include: []
+must_avoid: [gore]
+cta: ""
+source_files: []

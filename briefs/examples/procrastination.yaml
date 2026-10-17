@@ -1,0 +1,15 @@
+id: demo_001
+topic: Why do people procrastinate?
+audience: College students
+mode: minecraft
+duration_s: 45
+tone: engaging, conversational
+language: English
+subtitle_language: English
+format: video_9x16
+content_type: factual_explainer
+must_include: []
+must_avoid: []
+cta: ""
+source_files:
+  - ../sources/procrastination_notes.md

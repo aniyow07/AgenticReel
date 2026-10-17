@@ -1,0 +1,15 @@
+{
+  "title": "The Statues Moved",
+  "words_per_minute": 165,
+  "segments": [
+    {"segment_id": "N01", "beat": "hook", "text": "Marco had one rule on the museum night shift: never look away from the cameras.", "highlights": ["rule"]},
+    {"segment_id": "N02", "beat": "setup", "text": "At midnight, every statue was exactly where it should be.", "highlights": ["midnight"]},
+    {"segment_id": "N03", "beat": "rising tension", "text": "At one, the stone knight in Hall Three was facing the door.", "highlights": ["knight"]},
+    {"segment_id": "N04", "beat": "rising tension", "text": "Marco laughed it off. Probably the cleaners.", "highlights": ["cleaners"]},
+    {"segment_id": "N05", "beat": "rising tension", "text": "At two, the knight was in the hallway. And the cleaners had gone home hours ago.", "highlights": ["hallway"]},
+    {"segment_id": "N06", "beat": "rising tension", "text": "He grabbed his flashlight and walked to Hall Three, heart pounding.", "highlights": ["flashlight"]},
+    {"segment_id": "N07", "beat": "twist", "text": "The knight was back on its pedestal. Perfectly still.", "highlights": ["still"]},
+    {"segment_id": "N08", "beat": "twist", "text": "But on the dusty floor were fresh footprints, leading straight to the security office.", "highlights": ["footprints"]},
+    {"segment_id": "N09", "beat": "resolution", "text": "Marco checked the cameras one last time. His own chair was empty, and something was sitting in it.", "highlights": ["empty"]}
+  ]
+}

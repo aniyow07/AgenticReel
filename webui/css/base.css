@@ -1,0 +1,16 @@
+/* Element defaults and utilities. */
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); }
+body { min-height: 100vh; -webkit-font-smoothing: antialiased; }
+a { color: var(--text); text-decoration: none; }
+a:hover { color: var(--hover); }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .5; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input, select, textarea { outline: none; }
+/* text fields show focus with their own border, so the orange ring is only for buttons and links */
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; }
+::placeholder { color: var(--faint); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+[hidden] { display: none !important; }

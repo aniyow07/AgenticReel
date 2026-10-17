@@ -1,0 +1,20 @@
+flowchart TD
+    U[User brief + mode + settings<br/>Streamlit app.py / CLI run.py] --> P
+    subgraph Agents["Seven agents (agents/*.py) — orchestrated by orchestrator.py"]
+        P[1 Planner<br/>plan.json] --> R[2 Researcher / RAG<br/>BM25 over PDF/DOCX/TXT/MD<br/>facts.json]
+        R --> S[3 Scriptwriter<br/>script.md + script.json]
+        S --> B[4 Storyboarder<br/>storyboard.json]
+        B --> A[5 Asset Generator]
+        A --> TTS[TTS per chunk<br/>Edge TTS / Windows SAPI / supplied audio<br/>measured durations + word timings]
+        A --> VIS[Visual assets<br/>real gameplay (ffmpeg trim/loop/crop)<br/>music (user supplied)]
+        A --> MAN[Manim trusted templates<br/>process / flow / timeline / chart]
+        TTS --> E[6 Editor<br/>timeline, captions, SRT,<br/>render_props.json]
+        VIS --> E
+        MAN --> E
+        E --> RR[Remotion render<br/>OGVideo / MinecraftBrainrot / SubwayBrainrot]
+        RR --> FF[FFmpeg finish<br/>loudnorm -14 LUFS, H.264/AAC, size cap]
+        FF --> C[7 Critic / QA<br/>ffprobe + content checks<br/>qa_report.json]
+    end
+    C -- pass --> OUT[final.mp4 + captions.srt + logs + cost report]
+    C -- fail: route to stage, max 2 repairs --> S
+    LLM[(OpenRouter<br/>free models + fallbacks<br/>spend ceiling)] -. optional .-> P & R & S & B & C

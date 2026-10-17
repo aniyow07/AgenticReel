@@ -1,0 +1,38 @@
+/* Live preview on the Rendering screen: this video's plan, animated while it renders. */
+.frame.live { --lp: #3DD6B0; background: #0B0D10; color: #F2F2EF; }
+.frame.live.mode-minecraft { --lp: #7BD65A; }
+.frame.live.mode-subway { --lp: #FFB547; }
+.lp-bg { position: absolute; inset: 0; overflow: hidden; }
+.lp-bg::before { content: ""; position: absolute; inset: -50%; background:
+  repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0 1px, transparent 1px 28px),
+  repeating-linear-gradient(90deg, rgba(255,255,255,.05) 0 1px, transparent 1px 28px);
+  transform: perspective(300px) rotateX(55deg); transform-origin: 50% 60%; animation: lp-grid 6s linear infinite; }
+.lp-bg::after { content: ""; position: absolute; width: 70%; aspect-ratio: 1; left: 15%; top: 18%; border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--lp) 35%, transparent), transparent 70%);
+  filter: blur(10px); animation: lp-glow 7s ease-in-out infinite alternate; }
+@keyframes lp-grid { from { background-position: 0 0; } to { background-position: 0 28px; } }
+@keyframes lp-glow { from { transform: translate(-12%, -6%) scale(.9); } to { transform: translate(12%, 10%) scale(1.1); } }
+
+.lp-body { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 18px 16px; gap: 14px; }
+.lp-top { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: rgba(242,242,239,.7); }
+.lp-top span:last-child { color: var(--lp); }
+.lp-card { margin: auto 0; display: flex; flex-direction: column; gap: 14px; animation: lp-in .5s cubic-bezier(.2,.7,.2,1) both; }
+.lp-text { margin: 0; font-size: 20px; line-height: 1.25; font-weight: 700; text-align: center; text-wrap: balance; }
+.lp-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.lp-items li { padding: 8px 10px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--lp) 55%, transparent);
+  background: rgba(11,13,16,.6); font-size: 12px; text-align: center; animation: lp-in .45s cubic-bezier(.2,.7,.2,1) both;
+  animation-delay: calc(var(--i) * 140ms + 150ms); }
+.lp-dots { display: flex; justify-content: center; gap: 5px; }
+.lp-dots span { width: 5px; height: 5px; border-radius: 50%; background: rgba(242,242,239,.25); transition: background .3s, width .3s; }
+.lp-dots span.on { width: 16px; border-radius: 3px; background: var(--lp); }
+.lp-lines { list-style: none; margin: auto 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.lp-lines li { font-size: 14px; line-height: 1.4; color: rgba(242,242,239,.45); }
+.lp-lines li.now { color: #F2F2EF; animation: lp-in .45s ease both; }
+.lp-plan { margin: auto 0; display: flex; flex-direction: column; gap: 10px; }
+.lp-plan span { height: 12px; border-radius: 6px; background: linear-gradient(90deg, rgba(255,255,255,.06) 25%, color-mix(in srgb, var(--lp) 30%, transparent) 50%, rgba(255,255,255,.06) 75%);
+  background-size: 200% 100%; animation: shimmer 1.6s linear infinite; }
+.lp-plan span:nth-child(2) { width: 80%; }
+.lp-plan span:nth-child(3) { width: 60%; }
+.lp-plan p { margin: 6px 0 0; font-size: 12px; color: rgba(242,242,239,.7); }
+@keyframes lp-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .lp-bg::before, .lp-bg::after, .lp-card, .lp-items li, .lp-lines li.now, .lp-plan span { animation: none; } }

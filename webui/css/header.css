@@ -1,0 +1,22 @@
+/* header */
+.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 32px; border-bottom: 1px solid var(--divider); position: sticky; top: 0; z-index: 10; background: var(--bg); }
+.top-left, .top-right { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.top-left { gap: 28px; }
+.logo { font-weight: 700; font-size: 17px; letter-spacing: -0.01em; }
+.nav { display: flex; gap: 4px; }
+.nav a { color: var(--muted); padding: 8px 12px; border-radius: 8px; font-size: 14px; font-weight: 500; }
+.nav a:hover, .nav a.on { color: var(--text); background: var(--surface2); }
+.model { font-size: 12px; color: var(--muted); }
+.model.warn { color: var(--accent); }
+.queue { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; }
+.icon-btn { width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line); background: transparent;
+  color: var(--muted); display: flex; align-items: center; justify-content: center; }
+.icon-btn:hover { background: var(--surface2); color: var(--text); }
+.i-moon { display: none; }
+:root[data-theme="light"] .i-sun { display: none; }
+:root[data-theme="light"] .i-moon { display: block; }
+
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+.pulse { animation: pulse 1.4s ease-in-out infinite; }

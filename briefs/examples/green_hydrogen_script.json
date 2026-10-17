@@ -1,0 +1,17 @@
+﻿{
+  "title": "Green Hydrogen, Explained",
+  "cta": "Ask your teacher how your town could use clean energy.",
+  "words_per_minute": 150,
+  "segments": [
+    {"segment_id": "N01", "beat": "hook", "text": "What if a fuel could come from water and sunshine?", "highlights": ["water", "sunshine"]},
+    {"segment_id": "N02", "beat": "core idea", "text": "That is the idea behind green hydrogen.", "highlights": ["green", "hydrogen"]},
+    {"segment_id": "N03", "beat": "how it works", "text": "Green hydrogen is made by electrolysis, using electricity from wind or solar power.", "fact_ids": ["F001"], "highlights": ["electrolysis"]},
+    {"segment_id": "N04", "beat": "how it works", "text": "An electric current splits water into hydrogen and oxygen.", "fact_ids": ["F002"], "highlights": ["splits"]},
+    {"segment_id": "N05", "beat": "key points", "text": "It can help industries that are hard to run on electricity, like making steel and fertiliser.", "fact_ids": ["F005"], "highlights": ["steel"]},
+    {"segment_id": "N06", "beat": "key points", "text": "It can also store renewable energy for later and power fuel cell vehicles.", "fact_ids": ["F006"], "highlights": ["store"]},
+    {"segment_id": "N07", "beat": "challenges", "text": "But right now it costs more to make than hydrogen from natural gas.", "fact_ids": ["F004"], "highlights": ["costs"]},
+    {"segment_id": "N08", "beat": "challenges", "text": "And making it loses some energy, so it is less efficient than using electricity directly.", "fact_ids": ["F003"], "highlights": ["efficient"]},
+    {"segment_id": "N09", "beat": "takeaway", "text": "Ask your teacher how your town could use clean energy.", "highlights": ["clean"]}
+  ]
+}
+

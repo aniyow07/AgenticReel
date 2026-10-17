@@ -1,0 +1,53 @@
+# Gameplay sources used by `python scripts/setup_gameplay_assets.py`.
+#
+# Only list sources whose download method is permitted by the host and whose
+# reuse terms you have checked. `review_status` is what the manifest records:
+#   verified      - permission confirmed for editing, narration and your intended use
+#   needs_review  - a license is stated but could not be independently confirmed
+#   rejected      - do not use
+# Never mark a source "verified" just because a title says "no copyright".
+#
+# To add your own recording or another authorized clip without editing code:
+#   python scripts/setup_gameplay_assets.py --game minecraft --url <direct URL> --license "..." --creator "..."
+#   python scripts/setup_gameplay_assets.py --game subway --register path/to/my_recording.mp4 --creator "me" --license "own recording"
+
+sources:
+  - asset_id: minecraft_parkour_vinciteo00
+    game: minecraft
+    filename: parkour.mp4
+    url: "https://archive.org/download/il-mio-parkour-su-minecraft-vinci-teo-00-yt/IL%20MIO%20PARKOUR%20SU%20MINECRAFT%21%20-%20VinciTeo00%20YT.mp4"
+    source_page: "https://archive.org/details/il-mio-parkour-su-minecraft-vinci-teo-00-yt"
+    creator: "VinciTeo00 YT (per Internet Archive item metadata)"
+    license: "CC0 1.0 (public domain dedication) as stated on the Internet Archive item"
+    permission_evidence_url: "https://archive.org/metadata/il-mio-parkour-su-minecraft-vinci-teo-00-yt"
+    attribution_required: false
+    attribution_text: "Minecraft parkour gameplay by VinciTeo00 YT (Internet Archive, CC0). Minecraft is a trademark of Mojang/Microsoft; not affiliated."
+    # pure gameplay only: skips the intro card, two settings-menu visits (~32-39s, ~95-101s, ~203-230s),
+    # a death screen (~336-341s) and the outro (355s+). Checked frame by frame at 1-2 fps.
+    usable_ranges: "11-31;40-94;102-202;208-222;231-335;342-354"
+    review_status: needs_review
+    notes: >-
+      Real Minecraft parkour gameplay (1280x720, ~6 min). The item description is written in the first person
+      ("my first parkour") and carries a CC0 licenseurl, but the uploader account cannot be independently tied to
+      the YouTube creator. The in-game chat in the footage shows the player name "VinciTeo00", which matches the stated creator. Minecraft's usage guidelines allow gameplay videos (a revocable permission, not a
+      license). Confirm the creator's permission before commercial use.
+
+  - asset_id: subway_surfers_2024_9x16
+    game: subway
+    filename: subway_surfers.mp4
+    url: "https://archive.org/download/subway-surfers-2024-gameplay-4-k-9x-16-no-copyright-1/Subway%20Surfers%20%282024%29%20-%20Gameplay%20%5B4K%209x16%5D%20No%20Copyright%20%281%29.mp4"
+    source_page: "https://archive.org/details/subway-surfers-2024-gameplay-4-k-9x-16-no-copyright-1"
+    creator: "Unknown original recorder; Internet Archive uploader lists creator as 'Subway Surfers'"
+    license: "CC0 1.0 claimed by the Internet Archive uploader; no grant from SYBO Games found"
+    permission_evidence_url: "https://archive.org/metadata/subway-surfers-2024-gameplay-4-k-9x-16-no-copyright-1"
+    attribution_required: false
+    attribution_text: "Subway Surfers gameplay (Internet Archive upload). Subway Surfers is a trademark of SYBO Games; not affiliated."
+    review_status: needs_review
+    notes: >-
+      Real Subway Surfers gameplay, already 9:16 (720x1278, ~3 min). This appears to be a re-upload of a
+      "No Copyright" YouTube compilation; that label is not proof of permission and SYBO publishes no gameplay
+      video policy. Suitable for local testing only until you replace it with your own recording or obtain
+      written permission.
+
+
+

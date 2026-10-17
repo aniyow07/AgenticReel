@@ -1,0 +1,16 @@
+id: hydrogen
+topic: Explain green hydrogen to school students
+audience: School students aged 12-15
+mode: og
+duration_s: 45
+tone: clear, upbeat
+language: English
+subtitle_language: English
+format: video_9x16
+content_type: factual_explainer
+must_include:
+  - electrolysis
+must_avoid: []
+cta: "Ask your teacher how your town could use clean energy."
+source_files:
+  - ../sources/green_hydrogen_primer.md

@@ -1,0 +1,12 @@
+/* buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 44px; padding: 0 18px;
+  border-radius: 11px; border: 1px solid var(--line); background: transparent; color: var(--muted); font-size: 14px; font-weight: 500; }
+.btn:hover { background: var(--surface2); color: var(--text); }
+.btn.primary { background: var(--text); border-color: var(--text); color: var(--bg); font-weight: 600; font-size: 15px; }
+.btn.primary:hover { background: var(--hover); border-color: var(--hover); color: var(--bg); }
+.btn.big { height: 52px; font-size: 16px; border-radius: 12px; }
+.btn.block { width: 100%; }
+.kbd { font-size: 12px; opacity: .55; font-weight: 500; }
+
+.btn.danger { color: var(--danger); border-color: var(--line); }
+.btn.danger:hover { background: var(--danger); border-color: var(--danger); color: #FFFFFF; }
