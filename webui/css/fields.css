@@ -11,6 +11,9 @@
 .input:focus { border-color: var(--strong); }
 textarea.input { height: auto; padding: 10px 12px; resize: vertical; line-height: 1.5; }
 select.input { min-width: 170px; }
+.voice-row { display: flex; gap: 8px; align-items: center; }
+.voice-play { width: 44px; height: 44px; flex: none; }
+.voice-play.busy { opacity: .6; cursor: progress; }
 .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .check { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14px; color: var(--muted); }
 .check input { width: 16px; height: 16px; accent-color: var(--text); }

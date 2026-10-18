@@ -138,6 +138,15 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(system.info())
         if parts == ["voices"]:
             return self.send_json(voices.voices())
+        if parts == ["voices", "sample"]:
+            qs = parse_qs(url.query)
+            try:
+                path = voices.sample((qs.get("voice") or [""])[0], int((qs.get("speed") or ["0"])[0]))
+            except ValueError as e:
+                return self.send_error_json(400, str(e))
+            except Exception:  # noqa: BLE001 - offline or the TTS service refused
+                return self.send_error_json(502, "Could not record a sample. Check your internet connection.")
+            return self.send_file(path, cache=True)
         if parts == ["jobs"]:
             return self.send_json(jobs.list_all())
         if len(parts) >= 2 and parts[0] == "jobs":

@@ -7,12 +7,14 @@ import { initTheme } from './ui/header.js';
 import { initShortcuts } from './ui/shortcuts.js';
 import { refreshJobs } from './services/jobs.js';
 import { loadVoices } from './services/voices.js';
+import { initVoicePreview } from './services/voicePreview.js';
 import { handleCreateClick } from './screens/create.js';
 
 async function boot() {
   initTheme();
   initRouter();
   initShortcuts();
+  initVoicePreview();
   app.addEventListener('click', handleCreateClick);
   try { state.info = await api('/api/info'); } catch (e) { /* header stays empty */ }
   await refreshJobs();

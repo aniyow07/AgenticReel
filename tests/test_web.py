@@ -104,6 +104,29 @@ def test_rename_sets_title_and_download_names(server):
     assert "Content-Disposition" not in call(f"{base}/api/jobs/{job.name}/video")[1]
 
 
+def test_voice_sample_is_recorded_once_and_cached(server, tmp_path, monkeypatch):
+    base, _ = server
+    from webapp import voices as V
+    calls = []
+
+    class FakeTTS:
+        def __init__(self, voice, rate, timeout_s=30):
+            calls.append((voice, rate))
+
+        def synthesize(self, text, out):
+            out.write_bytes(b"RIFF" + b"\0" * 2000)
+
+    import providers.tts
+    monkeypatch.setattr(providers.tts, "EdgeTTS", FakeTTS)
+    monkeypatch.setattr(V, "voices", lambda: [{"id": "en-IN-PrabhatNeural"}])
+    for _ in range(2):
+        code, headers, body = call(f"{base}/api/voices/sample?voice=en-IN-PrabhatNeural&speed=10")
+        assert code == 200 and len(body) == 2004
+    assert calls == [("en-IN-PrabhatNeural", "+10%")]
+    assert call(f"{base}/api/voices/sample?voice=../../evil&speed=0")[0] == 400
+    assert call(f"{base}/api/voices/sample?voice=en-US-NotRealNeural&speed=0")[0] == 400
+
+
 def test_voice_labels_name_the_accent():
     assert voice_label("en-IN-PrabhatNeural") == "Prabhat · Indian accent"
     assert voice_label("ja-JP-KeitaNeural") == "Keita · Japanese accent"
