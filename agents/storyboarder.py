@@ -11,6 +11,7 @@ import re
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from agents.base import AgentContext, ask_llm
+from core.mathtext import clean_tree, latex_to_unicode
 from retrieval.index import tokenize
 from rendering import manim_runner
 from schemas.artifacts import Facts, Plan, Script, Storyboard, StoryboardScene
@@ -173,6 +174,10 @@ def sanitize(ctx: AgentContext, sb: StoryboardLLM, script: Script, facts: Facts)
     numbers = _numbers_in_facts(facts)
     grounding = None if ctx.brief.content_type == "fictional_story" else grounding_corpus(ctx, script, facts)
     for sc in sb.scenes:
+        # models write equations in LaTeX; there is no LaTeX on screen, so turn it into Unicode math first
+        sc.on_screen_text = latex_to_unicode(sc.on_screen_text)
+        sc.visual_parameters = clean_tree(sc.visual_parameters)
+        sc.manim_template = clean_tree(sc.manim_template)
         if ctx.brief.mode != "og":
             sc.visual_type, sc.visual_parameters, sc.manim_template = "gameplay", {}, None
             continue

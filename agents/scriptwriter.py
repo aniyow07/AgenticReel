@@ -6,6 +6,7 @@ import re
 from pydantic import BaseModel, ConfigDict, Field
 
 from agents.base import AgentContext, ask_llm, brief_summary, words_budget
+from core.mathtext import latex_to_unicode
 from retrieval.index import STOP
 from schemas.artifacts import Facts, Plan, Script, ScriptSegment
 
@@ -174,7 +175,7 @@ def check_script(script: Script, facts: Facts, ctx: AgentContext) -> list[str]:
 def to_script(data: ScriptLLM, origin: str) -> Script:
     segs = []
     for s in data.segments:
-        for part in split_long(s.text):
+        for part in split_long(latex_to_unicode(s.text)):
             hl = [h for h in s.highlights if h.lower() in part.lower()][:2] or pick_highlights(part, 1)
             segs.append(ScriptSegment(segment_id=f"N{len(segs) + 1:02d}", text=part, beat=s.beat,
                                       fact_ids=s.fact_ids, highlights=hl))

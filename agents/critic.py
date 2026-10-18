@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from agents.base import AgentContext, ask_llm, brief_summary
 from agents.editor import output_profile
 from agents.scriptwriter import check_script
+from core.mathtext import KEEP_KEYS, has_raw_latex
 from rendering.media_utils import MediaError, black_frame_ratio, probe
 from rendering.timeline import parse_srt
 from schemas.artifacts import AssetManifest, Facts, QACheck, QAReport, Script, Storyboard
@@ -129,6 +130,11 @@ def run(ctx: AgentContext, script: Script, storyboard: Storyboard, facts: Facts,
     covered = {c.segment_id for c in _caption_alignments(job)}
     check("every_segment_captioned", seg_ids <= covered, f"{len(covered)}/{len(seg_ids)} segments", route="editing")
 
+    # equations must reach the screen as math, never as raw LaTeX commands
+    raw = [t for t in _screen_texts(props) if has_raw_latex(t)]
+    check("no_raw_latex_on_screen", not raw, f"raw LaTeX in: {raw[0][:60]!r}" if raw else "clean",
+          route="storyboarding")
+
     # scenes
     if props.mode == "og":
         tiles = sorted((s.startFrame, s.durationInFrames) for s in props.scenes)
@@ -196,6 +202,26 @@ def run(ctx: AgentContext, script: Script, storyboard: Storyboard, facts: Facts,
                     repairs_attempted=repairs, is_test_render=brief.dev_short,
                     output={"final": str(final), "srt": str(srt), "duration_s": info.duration if info else None,
                             "label": "TEST RENDER (dev-short)" if brief.dev_short else "production"})
+
+
+def _screen_texts(props) -> list[str]:
+    """Every string shown on screen: scene parameters, Manim params and captions."""
+    out: list[str] = []
+
+    def walk(v):
+        if isinstance(v, str):
+            out.append(v)
+        elif isinstance(v, dict):
+            for k, x in v.items():
+                if k not in KEEP_KEYS:
+                    walk(x)
+        elif isinstance(v, (list, tuple)):
+            for x in v:
+                walk(x)
+    data = props.model_dump() if hasattr(props, "model_dump") else {}
+    walk(data.get("scenes", []))
+    walk([c.get("text", "") for c in data.get("captions", []) or [] if isinstance(c, dict)])
+    return out
 
 
 def _caption_alignments(job):

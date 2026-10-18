@@ -1,12 +1,12 @@
 """Agent 1: Planner -> plan.json"""
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from agents.base import AgentContext, ask_llm, brief_summary, words_budget
 from schemas.artifacts import Plan
 
-PROMPT_VERSION = "planner/v3"
+PROMPT_VERSION = "planner/v4"
 
 SYSTEM = """You are the Planner agent of AgentReel, a short-form video generator.
 Plan ONE video for the brief. Adapt to the brief: do not reuse a generic template.
@@ -20,9 +20,36 @@ Rules:
 - Return ONLY a JSON object with the requested keys."""
 
 
+def _as_text(item) -> str:
+    """Models often return a beat as an object ({"beat": "Hook", "description": "..."}): keep its words."""
+    if isinstance(item, dict):
+        def pick(keys):
+            return next((str(item[k]).strip() for k in keys if isinstance(item.get(k), str) and item[k].strip()), "")
+        name = pick(("beat", "name", "title", "label", "stage", "step"))
+        text = pick(("description", "text", "content", "detail", "summary", "purpose", "goal"))
+        if name and text:
+            return f"{name}: {text}"
+        return name or text or next((str(v).strip() for v in item.values() if isinstance(v, str) and v.strip()), "")
+    return str(item).strip()
+
+
 class PlanLLM(BaseModel):
     model_config = ConfigDict(coerce_numbers_to_str=True)  # LLMs sometimes emit 3 for "3"
     goal: str
+
+    @field_validator("narrative_structure", "research_questions", "manim_scenes", "needed_assets",
+                     "success_criteria", mode="before")
+    @classmethod
+    def _text_list(cls, v):
+        # accept the shapes models actually send: a single string, or a list of objects, instead of failing
+        # the whole call and paying for a retry (this was why most planning calls needed a second attempt)
+        if v is None:
+            return []
+        if isinstance(v, (str, dict)):
+            v = [v]
+        if isinstance(v, list):
+            return [t for t in (_as_text(x) for x in v) if t]
+        return v
     narrative_structure: list[str] = Field(min_length=2, max_length=10)
     scene_count: int = Field(ge=1, le=14)
     research_required: bool
@@ -64,9 +91,12 @@ def local_plan(ctx: AgentContext) -> PlanLLM:
 
 def run(ctx: AgentContext) -> Plan:
     b = ctx.brief
-    user = (f"Brief:\n{brief_summary(b)}\n\nReturn JSON with keys: goal, narrative_structure (list of beats), "
-            f"scene_count, research_required, research_questions, visual_strategy, manim_scenes (beats suited to "
-            f"a Manim diagram, OG only), needed_assets, success_criteria.")
+    user = (f"Brief:\n{brief_summary(b)}\n\nReturn ONLY this JSON shape (every list item is a short plain "
+            f"string, not an object):\n"
+            '{"goal": "...", "narrative_structure": ["Hook: ...", "Core idea: ...", "..."], "scene_count": 5, '
+            '"research_required": true, "research_questions": ["..."], "visual_strategy": "...", '
+            '"manim_scenes": ["beat suited to a Manim diagram (OG only)"], "needed_assets": ["..."], '
+            '"success_criteria": ["...", "..."]}')
     data = ask_llm(ctx, "planning", SYSTEM, user, PlanLLM, PROMPT_VERSION, temperature=0.4, max_tokens=1500)
     origin = "llm" if data else "local"
     data = data or local_plan(ctx)

@@ -106,7 +106,14 @@ def extract_json(text: str):
         raise ValueError("no JSON object found in reply")
     start = min(starts)
     end = max(t.rfind("}"), t.rfind("]"))
-    return json.loads(t[start:end + 1])
+    body = t[start:end + 1]
+    try:
+        return json.loads(body)
+    except json.JSONDecodeError:
+        # the usual near-misses: trailing commas ("...,}") and // comments; fix those before asking again
+        cleaned = re.sub(r"(?m)^\s*//.*$", "", body)
+        cleaned = re.sub(r",\s*([}\]])", r"\1", cleaned)
+        return json.loads(cleaned)
 
 
 class OpenRouterClient:
