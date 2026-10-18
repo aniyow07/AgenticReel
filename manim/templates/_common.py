@@ -134,6 +134,67 @@ def stream(path_mob, color: str, count: int = 3, speed: float = 0.6, radius: flo
     return dots
 
 
+# ---------------- looks: so diagrams in different scenes and videos do not all share one design ----------------
+LOOKS = ("rounded", "pill", "sharp", "glass", "underline")
+
+
+def look_of(p: dict) -> str:
+    """The look asked for in the params, else one picked from the scene's own text."""
+    lk = p.get("look")
+    if lk in LOOKS:
+        return lk
+    seed = str(p.get("title", "")) + str(p.get("template", ""))
+    return LOOKS[sum(map(ord, seed)) % len(LOOKS)]
+
+
+def card(text: str, C: dict, width: float, look: str, color: str | None = None, size: float = 26,
+         min_h: float = 0.8):
+    """A labelled box in one of the looks: rounded outline, filled pill, sharp card with an accent bar,
+    frosted glass, or bare text with an underline."""
+    from manim import Line, Rectangle, RoundedRectangle
+    color = color or C["primary"]
+    t = fit_width(label(text, size, C["text"]), width * 0.86)
+    h = max(min_h, t.height + 0.42)
+    if look == "pill":
+        r = RoundedRectangle(corner_radius=h / 2, width=width, height=h, stroke_width=0, fill_color=color,
+                             fill_opacity=0.32)
+    elif look == "sharp":
+        r = Rectangle(width=width, height=h, stroke_width=0, fill_color=C["surface"], fill_opacity=1)
+        bar = Rectangle(width=0.12, height=h, stroke_width=0, fill_color=color, fill_opacity=1)
+        bar.align_to(r, LEFT)
+        r = VGroup(r, bar)
+    elif look == "glass":
+        r = RoundedRectangle(corner_radius=0.1, width=width, height=h, stroke_color=C["text"], stroke_width=1.5,
+                             stroke_opacity=0.45, fill_color=C["text"], fill_opacity=0.07)
+    elif look == "underline":
+        r = Line(LEFT * width * 0.42, RIGHT * width * 0.42, color=color, stroke_width=5).shift(DOWN * (t.height / 2 + 0.14))
+        box = VGroup(r, t)
+        t.move_to([0, 0, 0])
+        return box
+    else:  # rounded
+        r = RoundedRectangle(corner_radius=0.18, width=width, height=h, stroke_color=color, stroke_width=4,
+                             fill_color=C["surface"], fill_opacity=1)
+    t.move_to(r)
+    return VGroup(r, t)
+
+
+def heading(text: str, C: dict, fw: float, look: str):
+    """The scene title, styled to match the look: centred, left-aligned with a bar, or with an underline."""
+    from manim import Line, Rectangle
+    t = fit_width(label(text, 38 if look != "glass" else 34, C["text"]), fw * 0.86)
+    if look in ("sharp", "underline"):
+        bar = Rectangle(width=0.14, height=t.height, stroke_width=0, fill_color=C["accent"], fill_opacity=1)
+        g = VGroup(bar, t).arrange(RIGHT, buff=0.22)
+        fit_width(g, fw * 0.88)
+        g.to_edge(UP, buff=0.45).to_edge(LEFT, buff=fw * 0.06)
+        return g
+    t.to_edge(UP, buff=0.4)
+    if look == "pill":
+        u = Line(LEFT * 0.6, RIGHT * 0.6, color=C["accent"], stroke_width=6).next_to(t, DOWN, buff=0.14)
+        return VGroup(t, u)
+    return t
+
+
 import ast  # noqa: E402
 
 _FUNCS = {"sin": math.sin, "cos": math.cos, "tan": math.tan, "exp": math.exp, "log": math.log, "ln": math.log,
@@ -193,5 +254,6 @@ def compile_expr(text: str):
 __all__ = [
     "BG", "SURFACE", "PRIMARY", "ACCENT", "TEXT", "MUTED", "FONT", "DEFAULT",
     "load_params", "setup_frame", "clean", "label", "fit_width", "scene_seconds", "colors", "ambient", "stream",
+    "LOOKS", "look_of", "card", "heading", "compile_expr",
     "UP", "DOWN", "LEFT", "RIGHT", "VGroup",
 ]

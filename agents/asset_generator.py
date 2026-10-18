@@ -232,10 +232,16 @@ def prepare_music(ctx: AgentContext) -> Path | None:
 def render_manim(ctx: AgentContext, storyboard: Storyboard, scene_durations: dict[str, float],
                  size: tuple[int, int], quality: str, palette: dict | None = None) -> dict[str, str]:
     clips: dict[str, str] = {}
+    # a different card/title look for each Manim scene, starting from a per-video offset
+    looks = list(manim_runner.LOOKS)
+    first = ctx.rng.randrange(len(looks))
+    n_manim = 0
     for sc in storyboard.scenes:
         if sc.visual_type != "manim" or not sc.manim_template:
             continue
         params = {**sc.manim_template, "duration_s": max(2.0, min(20.0, scene_durations.get(sc.scene_id, 6) - 0.3))}
+        params.setdefault("look", looks[(first + n_manim) % len(looks)])
+        n_manim += 1
         if palette:
             params["palette"] = palette
         key = _h(params, size, quality, "transparent-webm")

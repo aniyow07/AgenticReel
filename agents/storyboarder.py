@@ -16,7 +16,7 @@ from rendering import manim_runner
 from schemas.artifacts import Facts, Plan, Script, Storyboard, StoryboardScene
 from schemas.render_props import BACKDROP_STYLES, PARAM_MODELS, VISUAL_TYPES_OG
 
-PROMPT_VERSION = "storyboarder/v5"
+PROMPT_VERSION = "storyboarder/v6"
 
 SYSTEM = """You are the Storyboarder agent for an OG motion-graphics video. Group consecutive narration segments
 into scenes and choose a trusted visual for each. Allowed visual_type values and their visual_parameters:
@@ -52,6 +52,14 @@ into scenes and choose a trusted visual for each. Allowed visual_type values and
     {"template": "pie_chart", "title": str, "labels": [2-6], "values": [..] (ONLY supported numbers), "unit": "%"}
     {"template": "node_graph", "title": str, "nodes": [2-10 short names], "edges": [["A", "B"], ...],
       "path": [node names in visit order], "directed": bool, "layers": [3, 4, 2] (only for neural networks)}
+    {"template": "cycle_diagram", "title": str, "stages": [3-6 stages in order], "center": str}
+    {"template": "venn_diagram", "title": str, "sets": [{"name": str, "items": [0-3]}] (2-3 sets), "shared": [0-3]}
+    {"template": "pyramid", "title": str, "levels": [2-6, top level first]}
+    {"template": "mind_map", "title": str, "center": str, "branches": [{"name": str, "items": [0-2]}] (2-6)}
+  Use cycle_diagram for anything that repeats in a loop (water cycle, life cycles, feedback loops),
+  venn_diagram to compare 2-3 things and what they share, pyramid for hierarchies and levels (Maslow, food
+  chains, OSI layers), mind_map for an overview of a topic's main parts. Prefer variety: do not use the same
+  Manim template twice in one video when another one fits.
   Use function_plot for graphs of functions (parabolas, growth, trigonometry), line_chart for trends over time,
   pie_chart for shares of a whole, node_graph for networks, graph algorithms (BFS, DFS, shortest path),
   routing, social or neural networks.

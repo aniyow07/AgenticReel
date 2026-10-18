@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE_DIR = ROOT / "manim" / "templates"
 
 Short = Field(min_length=1, max_length=80)
+LOOKS = ("rounded", "pill", "sharp", "glass", "underline")
 _HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
 PALETTE_KEYS = {"background", "surface", "primary", "accent", "text", "mutedText"}
 
@@ -30,6 +31,8 @@ PALETTE_KEYS = {"background", "surface", "primary", "accent", "text", "mutedText
 class _Base(BaseModel):
     # colours only (validated hex); lets each clip match the palette of the video around it
     palette: dict[str, str] | None = None
+    # card shape and title style; set per scene by the asset generator so diagrams do not all look alike
+    look: Literal["rounded", "pill", "sharp", "glass", "underline"] | None = None
 
     @field_validator("palette")
     @classmethod
@@ -305,7 +308,73 @@ class NodeGraphParams(_Base):
         return v
 
 
+def _items(v: list[str], lo: int, hi: int, what: str) -> list[str]:
+    v = [str(s).strip()[:40] for s in v if str(s).strip()]
+    if not lo <= len(v) <= hi:
+        raise ValueError(f"need {lo}-{hi} {what}")
+    return v
+
+
+class CycleParams(_Base):
+    """Stages that repeat in a loop (water cycle, product life cycle, a feedback loop)."""
+    template: Literal["cycle_diagram"] = "cycle_diagram"
+    title: str = Field(default="", max_length=80)
+    stages: list[str]
+    center: str = Field(default="", max_length=30)
+    duration_s: float = Field(default=8.0, ge=2, le=20)
+
+    @field_validator("stages")
+    @classmethod
+    def _stages(cls, v):
+        return _items(v, 3, 6, "stages")
+
+
+class VennSet(BaseModel):
+    name: str = Field(min_length=1, max_length=24)
+    items: list[str] = Field(default_factory=list, max_length=3)
+
+
+class VennParams(_Base):
+    """Two or three overlapping groups and what they share."""
+    template: Literal["venn_diagram"] = "venn_diagram"
+    title: str = Field(default="", max_length=80)
+    sets: list[VennSet] = Field(min_length=2, max_length=3)
+    shared: list[str] = Field(default_factory=list, max_length=3)
+    duration_s: float = Field(default=8.0, ge=2, le=20)
+
+
+class PyramidParams(_Base):
+    """A hierarchy, top level first (Maslow, food chain, OSI layers, priorities)."""
+    template: Literal["pyramid"] = "pyramid"
+    title: str = Field(default="", max_length=80)
+    levels: list[str]
+    duration_s: float = Field(default=8.0, ge=2, le=20)
+
+    @field_validator("levels")
+    @classmethod
+    def _levels(cls, v):
+        return _items(v, 2, 6, "levels")
+
+
+class Branch(BaseModel):
+    name: str = Field(min_length=1, max_length=24)
+    items: list[str] = Field(default_factory=list, max_length=2)
+
+
+class MindMapParams(_Base):
+    """A central idea with 2-6 branches and up to two leaves each."""
+    template: Literal["mind_map"] = "mind_map"
+    title: str = Field(default="", max_length=80)
+    center: str = Field(min_length=1, max_length=30)
+    branches: list[Branch] = Field(min_length=2, max_length=6)
+    duration_s: float = Field(default=8.0, ge=2, le=20)
+
+
 TEMPLATES: dict[str, tuple[str, str, type[BaseModel]]] = {
+    "cycle_diagram": ("cycle_diagram.py", "CycleDiagramScene", CycleParams),
+    "venn_diagram": ("venn_diagram.py", "VennDiagramScene", VennParams),
+    "pyramid": ("pyramid.py", "PyramidScene", PyramidParams),
+    "mind_map": ("mind_map.py", "MindMapScene", MindMapParams),
     "function_plot": ("function_plot.py", "FunctionPlotScene", FunctionPlotParams),
     "line_chart": ("line_chart.py", "LineChartScene", LineChartParams),
     "pie_chart": ("pie_chart.py", "PieChartScene", PieChartParams),

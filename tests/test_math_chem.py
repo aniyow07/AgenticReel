@@ -59,6 +59,17 @@ def test_chart_and_graph_params():
                            "path": ["A", "B", "C"]})
 
 
+def test_layout_templates_and_looks():
+    manim_runner.validate({"template": "cycle_diagram", "stages": ["a", "b", "c"], "look": "glass"})
+    manim_runner.validate({"template": "venn_diagram", "sets": [{"name": "A"}, {"name": "B"}], "shared": ["x"]})
+    manim_runner.validate({"template": "pyramid", "levels": ["top", "base"]})
+    manim_runner.validate({"template": "mind_map", "center": "ML", "branches": [{"name": "a"}, {"name": "b"}]})
+    with pytest.raises(Exception):  # a cycle needs at least three stages
+        manim_runner.validate({"template": "cycle_diagram", "stages": ["a", "b"]})
+    with pytest.raises(Exception):  # unknown look
+        manim_runner.validate({"template": "pyramid", "levels": ["a", "b"], "look": "comic-sans"})
+
+
 def test_sort_steps_really_sort():
     import importlib.util
     from pathlib import Path

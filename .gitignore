@@ -45,10 +45,12 @@ assets/music/*
 briefs/examples/resume_intro.yaml
 *.pdf
 *.docx
+!docs/AgentReel_Guide.pdf
 
 # --- local tooling and old UI snapshots ---
 .claude/
 ui_checkpoints/
+_cleanup_trash/
 .vscode/
 .idea/
 .DS_Store

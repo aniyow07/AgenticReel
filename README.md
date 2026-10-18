@@ -1,5 +1,7 @@
 # AgentReel
 
+A step-by-step guide (setup, running, how the agents work) is in [docs/AgentReel_Guide.pdf](docs/AgentReel_Guide.pdf).
+
 AgentReel turns an arbitrary brief into a finished short video through a seven-agent pipeline, in one
 of three visual personalities:
 
@@ -151,7 +153,8 @@ Every field is validated (Pydantic, `extra="forbid"`) before a job starts.
 * **Manim templates** (`manim/templates/`): process diagram, flow diagram, timeline, chart, step-by-step
   equation, chemical reaction, array algorithm (sorting/searching run for real on the given numbers), AI agent
   loop with tools, cybersecurity attack/defence flow, function graph (safe math parser, never eval), line chart,
-  donut chart and node/network graph. The storyboarder picks one when the topic fits.
+  donut chart, node/network graph, cycle, Venn diagram, pyramid and mind map. The storyboarder picks one when the
+  topic fits, and each Manim scene gets one of five looks (rounded, pill, sharp, glass, underline).
 * **Backgrounds** (Remotion): orbs, grid, waves, rays, shapes, aurora, constellation, hexgrid, circuit, contours,
   stripes and matrix, chosen per scene to match its mood and never the same twice in a row.
 * **No generated code runs.** Storyboards are parameters for known Remotion components and trusted

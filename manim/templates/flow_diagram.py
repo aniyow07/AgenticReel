@@ -9,22 +9,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from manim import (Arrow, Circle, Create, DashedVMobject, FadeIn, GrowArrow, Indicate, LaggedStart,  # noqa: E402
                    Line, RoundedRectangle, Scene, VGroup, Write)
 
-from _common import (DOWN, LEFT, RIGHT, UP, ambient, colors, fit_width, label, load_params,  # noqa: E402
-                     scene_seconds, stream)
+from _common import (DOWN, LEFT, RIGHT, UP, ambient, card, colors, fit_width, heading, label, load_params,  # noqa: E402
+                     look_of, scene_seconds, stream)
 
 
-def _node(text: str, width: float, color: str, C: dict) -> VGroup:
-    t = fit_width(label(text, 26, C["text"]), width * 0.88)
-    r = RoundedRectangle(corner_radius=0.15, width=width, height=max(0.8, t.height + 0.4),
-                         stroke_color=color, stroke_width=4, fill_color=C["surface"], fill_opacity=1)
-    t.move_to(r)
-    return VGroup(r, t)
+def _node(text: str, width: float, color: str, C: dict, look: str) -> VGroup:
+    return card(text, C, width, look, color, size=26)
 
 
 class FlowDiagramScene(Scene):
     def construct(self):
         p = load_params()
         C = colors(p)
+        look = look_of(p)
         self.camera.background_color = C["background"]
         inputs = [s for s in p.get("inputs", []) if str(s).strip()][:4]
         outputs = [s for s in p.get("outputs", []) if str(s).strip()][:4]
@@ -36,9 +33,9 @@ class FlowDiagramScene(Scene):
         ambient(self, C, "flow" + center)
         col_w = fw * 0.28
 
-        title = fit_width(label(p.get("title", ""), 38, C["text"]), fw * 0.9).to_edge(UP, buff=0.4)
-        ins = VGroup(*[_node(s, col_w, C["primary"], C) for s in inputs]).arrange(DOWN, buff=0.35)
-        outs = VGroup(*[_node(s, col_w, C["accent"], C) for s in outputs]).arrange(DOWN, buff=0.35)
+        title = heading(p.get("title", ""), C, fw, look)
+        ins = VGroup(*[_node(s, col_w, C["primary"], C, look) for s in inputs]).arrange(DOWN, buff=0.35)
+        outs = VGroup(*[_node(s, col_w, C["accent"], C, look) for s in outputs]).arrange(DOWN, buff=0.35)
         hub_r = min(col_w * 0.5, 1.3)
         hub_label = fit_width(label(center, 26, C["text"]), hub_r * 1.7)
         core = Circle(radius=hub_r, color=C["accent"], stroke_width=6, fill_color=C["surface"], fill_opacity=1)
