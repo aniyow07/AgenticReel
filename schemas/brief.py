@@ -40,6 +40,8 @@ class Brief(BaseModel):
     narration_audio: str = Field(default="", max_length=500)
     # Edge TTS voice short name, e.g. "en-US-GuyNeural"; empty = TTS_VOICE from .env
     voice: str = Field(default="", max_length=60)
+    # speaking speed in percent relative to the voice's normal pace (+10 = 10% faster); None = TTS_RATE setting
+    speed: int | None = Field(default=None, ge=-30, le=40)
     # brainrot camera motion: "auto" lets the storyboard model pick the energy of each line
     motion: Literal["auto", "off", "subtle", "strong"] = "auto"
     music: str = Field(default="", max_length=500)

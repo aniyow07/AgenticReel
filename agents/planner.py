@@ -72,7 +72,7 @@ def run(ctx: AgentContext) -> Plan:
     data = data or local_plan(ctx)
     if b.mode != "og":
         data.manim_scenes = []
-    words = words_budget(b.duration_s, b.mode)
+    words = words_budget(b.duration_s, b.mode, ctx.speed_pct)
     return Plan(goal=data.goal, audience=b.audience, tone=b.tone, content_type=b.content_type, mode=b.mode,
                 narrative_structure=data.narrative_structure, target_duration_s=b.duration_s,
                 scene_count=max(2, min(data.scene_count, 12)),

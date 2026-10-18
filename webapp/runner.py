@@ -105,6 +105,7 @@ def new_job(data: dict) -> str:
         "music": _upload_ok(data.get("music") or "", AUDIO_EXT),
         "dev_short": dev,
         "voice": data.get("voice") or "",
+        "speed": int(data["speed"]) if str(data.get("speed", "")).lstrip("+-").isdigit() else None,
         "motion": data.get("motion") or "auto",
     })
     exec_mode = data.get("exec_mode") if data.get("exec_mode") in EXEC_MODES else None

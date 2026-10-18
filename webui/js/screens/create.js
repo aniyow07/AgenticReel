@@ -2,7 +2,7 @@
 import { $, $$, app, esc } from '../core/dom.js';
 import { api, post } from '../core/api.js';
 import { icon } from '../core/icons.js';
-import { FORMATS, LANGS, MOTIONS, TYPES, WRITING_MODES, lengthChoices } from '../config.js';
+import { FORMATS, LANGS, MOTIONS, SPEEDS, TYPES, WRITING_MODES, lengthChoices } from '../config.js';
 import { state } from '../state.js';
 import { go, currentRoute } from '../router.js';
 import { groupHeads, refreshJobs } from '../services/jobs.js';
@@ -13,7 +13,7 @@ import { fileChips } from '../components/fileChips.js';
 import { recentStrip } from '../components/recentStrip.js';
 import { showErrors } from '../components/errorList.js';
 
-const SEG_FIELD = { Length: 'duration', Format: 'format', 'Camera motion': 'motion' };
+const SEG_FIELD = { Length: 'duration', Format: 'format', 'Camera motion': 'motion', 'Voice speed': 'speed' };
 
 const field = (id, label, control) => '<div class="field"><label for="' + id + '">' + label + '</label>' + control + '</div>';
 const options = (items, selected) => items.map(([v, l]) => '<option value="' + v + '"' + (v === selected ? ' selected' : '') + '>' + esc(l) + '</option>').join('');
@@ -42,6 +42,7 @@ function optionsSection(f) {
     '<div class="field"><span class="label">Format</span>' + segmented('Format', FORMATS, f.format) + '</div>' +
     '<div class="field"><label for="ctype">Type</label><select id="ctype" class="input">' + options(TYPES, f.content_type) + '</select></div>' +
     '<div class="field"><label for="voice">Voice</label>' + voiceSelect('voice', f.voice) + '</div>' +
+    '<div class="field"><span class="label">Voice speed</span>' + segmented('Voice speed', SPEEDS, f.speed) + '</div>' +
     '<div class="field" id="motion-field"' + (f.mode === 'og' ? ' hidden' : '') + '><span class="label">Camera motion</span>' + segmented('Camera motion', MOTIONS, f.motion) + '</div>' +
   '</section>';
 }
@@ -162,7 +163,7 @@ export function handleCreateClick(e) {
   }
   if (t.dataset.seg) {
     const key = SEG_FIELD[t.dataset.seg];
-    f[key] = key === 'duration' ? Number(t.dataset.val) : t.dataset.val;
+    f[key] = key === 'duration' || key === 'speed' ? Number(t.dataset.val) : t.dataset.val;
     $$('button[data-seg="' + t.dataset.seg + '"]').forEach((b) => b.setAttribute('aria-pressed', b === t));
   }
 }
@@ -178,7 +179,7 @@ async function generate() {
   try {
     const res = await post('/api/jobs', {
       topic: f.topic, mode: f.mode, duration_s: f.duration, format: f.format, content_type: f.content_type,
-      voice: f.voice, motion: f.motion, audience: f.audience, tone: f.tone, language: f.language,
+      voice: f.voice, speed: f.speed, motion: f.motion, audience: f.audience, tone: f.tone, language: f.language,
       subtitle_language: f.subtitle_language || f.language, must_include: f.must, must_avoid: f.avoid, cta: f.cta,
       source_files: f.files.map((x) => x.path), exec_mode: f.exec_mode || undefined, quick_test: f.quick_test,
       seed: Number(f.seed) || 42, fresh_script: f.fresh_script,

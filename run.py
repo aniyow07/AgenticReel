@@ -67,6 +67,9 @@ def main() -> int:
     ap.add_argument("--caption-position", choices=["upper", "center", "lower"])
     ap.add_argument("--output-dir", help="where job folders are written (default ./outputs)")
     ap.add_argument("--voice", help="Edge TTS voice, e.g. en-US-GuyNeural (see --list-voices)")
+    ap.add_argument("--voice-speed", type=int, metavar="PERCENT",
+                    help="speaking speed: 0 = the voice's normal pace, 10 = 10%% faster (default TTS_RATE, +10), "
+                         "-10 = slower; the script length follows it so videos stay 30-60 s")
     ap.add_argument("--provider", choices=["openrouter", "gemini"],
                     help="LLM provider for this run (default: LLM_PROVIDER in .env, else openrouter)")
     ap.add_argument("--gemini-interval", type=float, metavar="SECONDS",
@@ -119,7 +122,7 @@ def main() -> int:
             report = p.run()
             job_dir = p.job.dir
         else:
-            overrides = {"motion": a.motion, "voice": a.voice, "mode": a.mode, "format": a.format, "duration_s": a.duration, "audience": a.audience,
+            overrides = {"motion": a.motion, "voice": a.voice, "speed": a.voice_speed, "mode": a.mode, "format": a.format, "duration_s": a.duration, "audience": a.audience,
                          "content_type": a.content_type}
             if a.dev_short:
                 overrides["dev_short"] = True

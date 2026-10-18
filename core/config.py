@@ -51,7 +51,7 @@ class Settings:
     llm_max_retries: int = 2
     tts_provider: str = "edge"
     tts_voice: str = "en-US-AriaNeural"
-    tts_rate: str = "+0%"
+    tts_rate: str = "+10%"
     max_repair_attempts: int = 2
     max_output_mb: float = 100
     max_upload_mb: float = 50
@@ -86,7 +86,7 @@ class Settings:
             llm_timeout_s=_float(e("OPENROUTER_TIMEOUT_S"), 90),
             tts_provider=(e("TTS_PROVIDER") or "edge").strip().lower(),
             tts_voice=(e("TTS_VOICE") or "en-US-AriaNeural").strip(),
-            tts_rate=(e("TTS_RATE") or "+0%").strip(),
+            tts_rate=(e("TTS_RATE") or "+10%").strip(),
             max_repair_attempts=int(_float(e("MAX_REPAIR_ATTEMPTS"), 2)),
             max_output_mb=_float(e("MAX_OUTPUT_MB"), 100),
             online_research=_bool(e("ONLINE_RESEARCH"), False),

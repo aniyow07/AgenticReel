@@ -238,16 +238,16 @@ class Pipeline:
     def assets_and_audio(self, script: Script, storyboard: Storyboard) -> AssetManifest:
         prof = editor.output_profile(self.ctx)
         # TTS first: everything else is timed from the measured narration.
-        tts_fp = fingerprint(script, self.settings.tts_provider, self.ctx.voice, self.settings.tts_rate,
+        tts_fp = fingerprint(script, self.settings.tts_provider, self.ctx.voice, self.ctx.base_rate,
                              self.brief.narration_audio)
 
         def tts_fn():
             segs = asset_generator.synthesize_segments(self.ctx, script)
             fit = self._fit_rate(segs)
-            if fit:  # slightly faster delivery so a reused script fits a slower voice (never above +15%)
-                self.ctx.rate_override = fit
-                self.job.log.log("tts", "pacing", "adjusted", rate=fit, reason="narration longer than the target")
-                self.ctx.notes.append(f"Narration sped up to {fit} so the script fits the target length.")
+            if fit:  # nudge the pace (at most 15 points either way) so the narration fits the allowed length
+                self.ctx.rate_override, why = fit
+                self.job.log.log("tts", "pacing", "adjusted", rate=self.ctx.rate_override, reason=why)
+                self.ctx.notes.append(f"Narration pace set to {self.ctx.rate_override}: {why}.")
                 segs = asset_generator.synthesize_segments(self.ctx, script)
             narration = asset_generator.assemble_narration(self.ctx, segs, editor.SEGMENT_GAP_S)
             self.job.write_json("assets/tts.json", {"segments": [s.model_dump() for s in segs],
@@ -311,16 +311,23 @@ class Pipeline:
             raise AgentFailure("assets", f"assets missing after preparation: {manifest.missing}")
         return manifest
 
-    def _fit_rate(self, segs) -> str | None:
+    def _fit_rate(self, segs) -> tuple[str, str] | None:
+        """A new speaking rate when the narration at the chosen speed would land outside 30-60 s (or well past
+        the target): faster if too long, slower if too short. Moves at most 15 points from the chosen speed."""
         if self.brief.dev_short or self.brief.narration_audio:
             return None
+        from schemas.brief import PROD_MIN_S
         speech = editor.compute_layout(segs).total_s
         limit = min(60.0, self.brief.duration_s * 1.1)
-        if speech <= limit:
-            return None
-        base = int(str(self.settings.tts_rate).strip("%+") or 0)
-        need = int((speech / limit - 1) * 100) + 2
-        return f"+{min(base + need, 15)}%"
+        floor = PROD_MIN_S + 1.0  # the critic fails anything under 30 s
+        base = self.ctx.speed_pct
+        if speech > limit:
+            need = int((speech / limit - 1) * 100) + 2
+            return f"{min(base + need, base + 15):+d}%", "narration was longer than the target"
+        if speech < floor:
+            need = int((floor / speech - 1) * 100) + 2
+            return f"{max(base - need, base - 15, -30):+d}%", "narration was shorter than 30 seconds"
+        return None
 
     def _write_asset_csv(self, manifest: AssetManifest) -> None:
         import csv

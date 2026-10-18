@@ -6,7 +6,7 @@ export const state = {
   jobs: [], // /api/jobs, refreshed on a timer
   form: {
     topic: '', files: [], mode: 'og', duration: 45, format: 'video_9x16', content_type: 'factual_explainer',
-    voice: '', motion: 'auto', audience: '', tone: '', language: 'English', subtitle_language: '',
+    voice: '', speed: 10, motion: 'auto', audience: '', tone: '', language: 'English', subtitle_language: '',
     must: '', avoid: '', cta: '', exec_mode: '', quick_test: false, seed: 42, fresh_script: false, adv: false,
   },
   lib: { tab: 'all', q: '' },

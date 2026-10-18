@@ -42,8 +42,19 @@ class AgentContext:
     rate_override: str | None = None
 
     @property
+    def base_rate(self) -> str:
+        """The speaking speed asked for: the brief's speed if set, else TTS_RATE from settings."""
+        if self.brief.speed is not None:
+            return f"{self.brief.speed:+d}%"
+        return self.settings.tts_rate
+
+    @property
     def tts_rate(self) -> str:
-        return self.rate_override or self.settings.tts_rate
+        return self.rate_override or self.base_rate
+
+    @property
+    def speed_pct(self) -> int:
+        return rate_pct(self.base_rate)
 
     @property
     def voice(self) -> str:
@@ -86,8 +97,17 @@ def ask_llm(ctx: AgentContext, stage: str, system: str, user: str, schema: type[
         return None
 
 
-def words_budget(duration_s: float, mode: str) -> int:
-    # calibrated against Edge TTS neural voices at +0% rate (about 140-150 words per minute)
-    wpm = 150 if mode != "og" else 140
+def rate_pct(rate: str) -> int:
+    """'+10%' -> 10, '-5%' -> -5; anything unreadable counts as 0."""
+    try:
+        return int(str(rate).strip().rstrip("%") or 0)
+    except ValueError:
+        return 0
+
+
+def words_budget(duration_s: float, mode: str, speed_pct: int = 0) -> int:
+    # calibrated against Edge TTS neural voices at +0% rate (about 140-150 words per minute); a faster voice
+    # needs proportionally more words to fill the same time, so videos do not come out short
+    wpm = (150 if mode != "og" else 140) * (1 + speed_pct / 100)
     # leave ~8% room for pauses between chunks and the closing hold
     return max(12, int(duration_s * 0.92 * wpm / 60))

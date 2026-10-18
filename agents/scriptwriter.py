@@ -94,7 +94,7 @@ def _sentence(s: str) -> str:
 
 def local_script(ctx: AgentContext, plan: Plan, facts: Facts) -> ScriptLLM:
     b = ctx.brief
-    budget = words_budget(b.duration_s, b.mode)
+    budget = words_budget(b.duration_s, b.mode, ctx.speed_pct)
     topic = clean_topic(b.topic, b.audience).rstrip(".?! ")
     if len(topic) > 1 and topic[1:2].islower() and not b.topic.strip().endswith("?"):
         topic = topic[0].lower() + topic[1:]  # "How rainbows form" -> "how rainbows form" mid-sentence
@@ -144,7 +144,7 @@ def check_script(script: Script, facts: Facts, ctx: AgentContext) -> list[str]:
     """Deterministic checks shared by the scriptwriter and the critic."""
     issues = []
     b = ctx.brief
-    budget = words_budget(b.duration_s, b.mode)
+    budget = words_budget(b.duration_s, b.mode, ctx.speed_pct)
     wc = script.word_count
     if wc > budget * 1.25:
         issues.append(f"script has {wc} words, budget is about {budget}")
@@ -192,7 +192,7 @@ def remove_unsupported(script: Script, issues: list[str]) -> Script:
 
 def run(ctx: AgentContext, plan: Plan, facts: Facts, feedback: list[str] | None = None) -> Script:
     b = ctx.brief
-    words = words_budget(b.duration_s, b.mode)
+    words = words_budget(b.duration_s, b.mode, ctx.speed_pct)
     fact_lines = "\n".join(f"- {f.fact_id} [{f.status}]: {f.claim}" for f in facts.facts) or "(none)"
     user = (f"Brief:\n{brief_summary(b)}\n\nPlan beats: {plan.narrative_structure}\n\nSUPPORTED FACTS (only "
             f"'supported' and 'user_provided' may be stated):\n{fact_lines}\n\nResearch limitations: "

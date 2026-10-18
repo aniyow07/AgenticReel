@@ -101,6 +101,7 @@ reuses the existing script/storyboard/narration.
 | `--ai-required` | `AI_REQUIRED`: fail clearly if the AI provider is unavailable |
 | `--provider gemini\|openrouter` | which AI provider to use for this run |
 | `--voice NAME` | Edge TTS voice, e.g. `en-IN-PrabhatNeural` (`--list-voices` lists them) |
+| `--voice-speed N` | speaking speed in percent (default +10 from `TTS_RATE`); the script length follows it |
 | `--dev-short` | short test render at 540×960 (allowed below 30 s; never labelled as production) |
 | `--resume JOB_ID` | rerun only stages whose inputs changed or that did not finish |
 | `--rerender JOB_ID` | new caption style, same content |

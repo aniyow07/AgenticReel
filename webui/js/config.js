@@ -16,6 +16,9 @@ export const LANGS = ['English', 'Hindi', 'Spanish', 'French', 'German', 'Portug
 
 export const MOTIONS = [['auto', 'Auto'], ['subtle', 'Subtle'], ['strong', 'Strong'], ['off', 'Off']];
 
+// narration speed in percent relative to the voice's normal pace; the script length follows it
+export const SPEEDS = [[-10, 'Slower'], [0, 'Normal'], [10, 'Fast'], [20, 'Faster']];
+
 export const FORMATS = [['video_9x16', 'Vertical 9:16'], ['video_16x9', 'Wide 16:9']];
 
 export const WRITING_MODES = [
