@@ -1,20 +1,53 @@
+%% AgentReel architecture (docs/architecture.png is drawn from the same graph by scripts/draw_architecture.py)
 flowchart TD
-    U[User brief + mode + settings<br/>Streamlit app.py / CLI run.py] --> P
-    subgraph Agents["Seven agents (agents/*.py) — orchestrated by orchestrator.py"]
-        P[1 Planner<br/>plan.json] --> R[2 Researcher / RAG<br/>BM25 over PDF/DOCX/TXT/MD<br/>facts.json]
-        R --> S[3 Scriptwriter<br/>script.md + script.json]
-        S --> B[4 Storyboarder<br/>storyboard.json]
-        B --> A[5 Asset Generator]
-        A --> TTS[TTS per chunk<br/>Edge TTS / Windows SAPI / supplied audio<br/>measured durations + word timings]
-        A --> VIS[Visual assets<br/>real gameplay (ffmpeg trim/loop/crop)<br/>music (user supplied)]
-        A --> MAN[Manim trusted templates<br/>process / flow / timeline / chart]
-        TTS --> E[6 Editor<br/>timeline, captions, SRT,<br/>render_props.json]
+    subgraph Start["How you start it"]
+        WEB["Web app: web.py<br/>webui/ (ES modules) + webapp/ local API"]
+        CLI["CLI: run.py<br/>--topic/--brief --provider --seed --resume --rerender --fresh-script"]
+        ST["Streamlit: app.py (older UI)"]
+    end
+    WEB --> O
+    CLI --> O
+    ST --> O
+    O["Orchestrator: orchestrator.py (Pipeline)<br/>state.json · stage fingerprints → cache & resume<br/>content cache reuses plan/script across versions"]
+
+    subgraph Agents["Agents (agents/*.py)"]
+        P["1 Planner<br/>plan.json"] --> R["2 Researcher (RAG)<br/>facts.json"]
+        R --> S["3 Scriptwriter<br/>script.json"]
+        S --> B["4 Storyboarder<br/>storyboard.json"]
+        B --> A["5 Asset Generator<br/>assets/manifest.json + .csv"]
+        A --> TTS["Voice (TTS)<br/>Edge TTS · SAPI · supplied audio<br/>measured lengths + word timings"]
+        A --> VIS["Footage & music<br/>gameplay cut from the middle"]
+        A --> MAN["Manim: 17 trusted templates · 5 looks<br/>validated params, transparent WebM"]
+        TTS --> E["6 Editor<br/>render_props.json · captions.srt"]
         VIS --> E
         MAN --> E
-        E --> RR[Remotion render<br/>OGVideo / MinecraftBrainrot / SubwayBrainrot]
-        RR --> FF[FFmpeg finish<br/>loudnorm -14 LUFS, H.264/AAC, size cap]
-        FF --> C[7 Critic / QA<br/>ffprobe + content checks<br/>qa_report.json]
+        E --> C["7 Critic / QA<br/>qa_report.json · ~30 checks + AI review"]
     end
-    C -- pass --> OUT[final.mp4 + captions.srt + logs + cost report]
-    C -- fail: route to stage, max 2 repairs --> S
-    LLM[(OpenRouter<br/>free models + fallbacks<br/>spend ceiling)] -. optional .-> P & R & S & B & C
+    O --> P
+    C -- "fail: route to the responsible stage (max 2 repairs)" --> S
+
+    subgraph Providers["AI provider routing (providers/)"]
+        GEM["Gemini<br/>3.8-flash → 3.5-flash-lite · pacing · quota skip"]
+        ORR["OpenRouter<br/>free models → fallbacks · spend cap"]
+        MODE["Execution mode<br/>AI_PREFERRED · AI_REQUIRED · LOCAL_ONLY<br/>replies validated by Pydantic"]
+    end
+    P -. AI .-> Providers
+    R -. AI .-> Providers
+    S -. AI .-> Providers
+    B -. AI .-> Providers
+    C -. AI review .-> Providers
+
+    subgraph Grounding["Grounding (retrieval/ + checks)"]
+        RAG["Ingest + BM25+ retrieval<br/>PDF · DOCX · TXT · MD, page numbers"]
+        GR["Grounding checks<br/>numbers verbatim · unsupported text/links/contacts stripped"]
+    end
+    R --> RAG
+    B --> GR
+
+    subgraph Render["Render (rendering/ + remotion/)"]
+        REM["Remotion<br/>OGVideo (12 backdrops) · Brainrot · Zod props"] --> FF["FFmpeg finish<br/>-14 LUFS · H.264/AAC · ffprobe"]
+        FF --> FIN["final.mp4 + captions.srt"]
+    end
+    E --> REM
+
+    LOGS["logs/: run_log.jsonl · cost_report.csv · interventions.md"]
