@@ -3,6 +3,9 @@ import { $, $$, esc } from '../core/dom.js';
 import { STYLES } from '../config.js';
 import { state } from '../state.js';
 
+// the preview clips are cached by the browser; the version changes when a clip is replaced
+const previewVersion = () => (state.info && state.info.asset_version ? '?v=' + state.info.asset_version : '');
+
 export function styleTiles(selected, short) {
   return '<div class="tiles' + (short ? ' short' : '') + '">' + Object.keys(STYLES).map((k) => {
     const st = STYLES[k];
@@ -10,7 +13,7 @@ export function styleTiles(selected, short) {
     return '<button type="button" class="tile" data-style="' + k + '" aria-pressed="' + (k === selected) + '"' + (ready ? '' : ' disabled') + '>' +
       // gameplay stills are not in the repository; a fresh clone shows a plain card until the clips are set up
       '<span class="pic"><img src="/static/img/style_' + k + '.jpg" alt="" onerror="this.remove()">' +
-      (short ? '' : '<video muted loop playsinline preload="none" src="/ui/preview_' + k + '.mp4"></video>') + '</span>' +
+      (short ? '' : '<video muted loop playsinline preload="none" src="/ui/preview_' + k + '.mp4' + previewVersion() + '"></video>') + '</span>' +
       '<span><span class="name">' + esc(st.name) + '</span>' +
       (short ? '' : '<br><span class="desc">' + esc(st.desc) + '</span>') +
       (ready ? '' : '<br><span class="warn">No footage set up</span>') + '</span></button>';

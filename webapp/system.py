@@ -18,4 +18,13 @@ def info() -> dict:
     except Exception:  # noqa: BLE001
         pass
     return {"provider": provider, "model": model.split("/")[-1].split(":")[0], "has_key": key,
-            "exec_mode": s.execution_mode, "default_voice": s.tts_voice, "ready": ready}
+            "exec_mode": s.execution_mode, "default_voice": s.tts_voice, "ready": ready,
+            "asset_version": asset_version()}
+
+
+def asset_version() -> str:
+    """Changes whenever a preview clip in assets/ui is replaced, so browsers fetch the new file instead of a
+    cached old one (the clips are served with a long cache lifetime)."""
+    from webapp.config import UI_ASSETS
+    stamps = [int(p.stat().st_mtime) for p in UI_ASSETS.glob("preview_*.mp4")]
+    return str(max(stamps)) if stamps else "0"
