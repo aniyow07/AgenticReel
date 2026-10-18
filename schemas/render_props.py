@@ -13,7 +13,8 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 VISUAL_TYPES_OG = ("title", "text_reveal", "key_points", "stat", "timeline", "process", "comparison", "chart",
                    "image", "manim", "end_card")
 VISUAL_TYPES_BRAINROT = ("gameplay",)
-BACKDROP_STYLES = ("orbs", "grid", "waves", "rays", "shapes")
+BACKDROP_STYLES = ("orbs", "grid", "waves", "rays", "shapes", "aurora", "constellation", "hexgrid", "circuit",
+                   "contours", "stripes", "matrix")
 
 
 def check_public_path(p: str) -> str:

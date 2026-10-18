@@ -95,7 +95,8 @@ const base = {
   durationInFrames: z.number().int().positive(),
   transition: z.enum(["fade", "slide", "zoom", "none"]).default("fade"),
   // animated background style for this scene (OG)
-  backdrop: z.enum(["orbs", "grid", "waves", "rays", "shapes"]).default("orbs"),
+  backdrop: z.enum(["orbs", "grid", "waves", "rays", "shapes", "aurora", "constellation", "hexgrid", "circuit",
+    "contours", "stripes", "matrix"]).default("orbs"),
 };
 
 export const SceneSchema = z.discriminatedUnion("visualType", [

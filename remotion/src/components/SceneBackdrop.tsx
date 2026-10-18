@@ -4,8 +4,10 @@ import React, { useMemo } from "react";
 import { AbsoluteFill, interpolate, random, useCurrentFrame, useVideoConfig } from "remotion";
 import type { Theme } from "../schemas/props";
 import { DynamicBackdrop } from "./DynamicBackdrop";
+import { Aurora, Circuit, Constellation, Contours, HexGrid, Matrix, Stripes } from "./ExtraBackdrops";
 
-export const BACKDROP_STYLES = ["orbs", "grid", "waves", "rays", "shapes"] as const;
+export const BACKDROP_STYLES = ["orbs", "grid", "waves", "rays", "shapes", "aurora", "constellation", "hexgrid",
+  "circuit", "contours", "stripes", "matrix"] as const;
 export type BackdropStyle = (typeof BACKDROP_STYLES)[number];
 
 const rgba = (hex: string, a: number) => {
@@ -142,6 +144,13 @@ export const SceneBackdrop: React.FC<{
       {style === "waves" ? <Waves theme={theme} t={t} /> : null}
       {style === "rays" ? <Rays theme={theme} t={t} /> : null}
       {style === "shapes" ? <Shapes theme={theme} t={t} seed={`${seed}-${sceneIndex}`} /> : null}
+      {style === "aurora" ? <Aurora theme={theme} t={t} seed={`${seed}-${sceneIndex}`} /> : null}
+      {style === "constellation" ? <Constellation theme={theme} t={t} seed={`${seed}-${sceneIndex}`} /> : null}
+      {style === "hexgrid" ? <HexGrid theme={theme} t={t} seed={`${seed}-${sceneIndex}`} /> : null}
+      {style === "circuit" ? <Circuit theme={theme} t={t} seed={`${seed}-${sceneIndex}`} /> : null}
+      {style === "contours" ? <Contours theme={theme} t={t} seed={`${seed}-${sceneIndex}`} /> : null}
+      {style === "stripes" ? <Stripes theme={theme} t={t} seed={`${seed}-${sceneIndex}`} /> : null}
+      {style === "matrix" ? <Matrix theme={theme} t={t} seed={`${seed}-${sceneIndex}`} /> : null}
       <AbsoluteFill style={{ background: "radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.5) 100%)" }} />
     </AbsoluteFill>
   );

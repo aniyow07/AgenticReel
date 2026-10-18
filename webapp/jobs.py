@@ -156,6 +156,7 @@ SCENE_KINDS = {
     "process_diagram": "Process diagram", "flow_diagram": "Flow diagram", "timeline": "Timeline",
     "simple_chart": "Chart", "equation_steps": "Equation", "chemical_reaction": "Reaction",
     "array_algorithm": "Algorithm", "agent_loop": "Agent loop", "security_flow": "Security",
+    "function_plot": "Graph", "line_chart": "Line chart", "pie_chart": "Pie chart", "node_graph": "Network",
 }
 
 
@@ -168,7 +169,8 @@ def scenes_preview(d: Path) -> list[dict]:
         vp = sc.get("visual_parameters") or {}
         kind = SCENE_KINDS.get(mt.get("template") or sc.get("visual_type"), (sc.get("visual_type") or "").replace("_", " "))
         items = (mt.get("steps") or mt.get("inputs") or [e.get("label", "") for e in mt.get("events") or []]
-                 or mt.get("lines") or mt.get("reactants") or [str(v) for v in mt.get("values") or []]
+                 or mt.get("lines") or mt.get("reactants") or mt.get("nodes")
+                 or [f.get("expr", "") for f in mt.get("functions") or []] or [str(v) for v in mt.get("values") or []]
                  or [x for x in (mt.get("attack"), mt.get("defense"), mt.get("target")) if x]
                  or mt.get("labels") or [s.get("text", "") if isinstance(s, dict) else s for s in mt.get("lines") or []]
                  or vp.get("points") or vp.get("items") or [])

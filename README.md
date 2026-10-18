@@ -150,7 +150,10 @@ Every field is validated (Pydantic, `extra="forbid"`) before a job starts.
   limitations.
 * **Manim templates** (`manim/templates/`): process diagram, flow diagram, timeline, chart, step-by-step
   equation, chemical reaction, array algorithm (sorting/searching run for real on the given numbers), AI agent
-  loop with tools, and a cybersecurity attack/defence flow. The storyboarder picks one when the topic fits.
+  loop with tools, cybersecurity attack/defence flow, function graph (safe math parser, never eval), line chart,
+  donut chart and node/network graph. The storyboarder picks one when the topic fits.
+* **Backgrounds** (Remotion): orbs, grid, waves, rays, shapes, aurora, constellation, hexgrid, circuit, contours,
+  stripes and matrix, chosen per scene to match its mood and never the same twice in a row.
 * **No generated code runs.** Storyboards are parameters for known Remotion components and trusted
   Manim templates; both sides validate (Pydantic in Python, Zod in Remotion). Subprocesses use argument
   lists; paths are sanitised; uploads are type- and size-checked (50 MB).

@@ -194,7 +194,122 @@ class SecurityParams(_Base):
     duration_s: float = Field(default=8.0, ge=2, le=20)
 
 
+_EXPR_FUNCS = {"sin", "cos", "tan", "exp", "log", "ln", "sqrt", "abs"}
+
+
+def check_expr(text: str) -> str:
+    """Accept only plain math in x (numbers, + - * / ^, a few functions, pi, e). Parsed, never run."""
+    import ast
+    src = str(text).replace("^", "**").replace("−", "-").replace("×", "*")
+    if len(src) > 60:
+        raise ValueError("function is too long")
+    try:
+        tree = ast.parse(src, mode="eval")
+    except SyntaxError as e:
+        raise ValueError(f"not a valid function: {text!r}") from e
+    for n in ast.walk(tree):
+        ok = isinstance(n, (ast.Expression, ast.BinOp, ast.UnaryOp, ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow,
+                            ast.USub, ast.UAdd, ast.Load)) \
+            or (isinstance(n, ast.Constant) and isinstance(n.value, (int, float)) and not isinstance(n.value, bool)) \
+            or (isinstance(n, ast.Name) and n.id in {"x", "pi", "e"} | _EXPR_FUNCS) \
+            or (isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in _EXPR_FUNCS
+                and len(n.args) == 1 and not n.keywords)
+        if not ok:
+            raise ValueError(f"not allowed in a function: {text!r}")
+    return text
+
+
+class PlotFunction(BaseModel):
+    expr: str = Field(min_length=1, max_length=60)
+    label: str = Field(default="", max_length=30)
+
+    @field_validator("expr")
+    @classmethod
+    def _expr(cls, v):
+        return check_expr(v)
+
+
+class FunctionPlotParams(_Base):
+    """Graph of y = f(x): 1-3 functions on shared axes, optional marked x values (roots, maxima)."""
+    template: Literal["function_plot"] = "function_plot"
+    title: str = Field(default="", max_length=80)
+    functions: list[PlotFunction] = Field(min_length=1, max_length=3)
+    x_min: float = -5
+    x_max: float = 5
+    y_min: float | None = None
+    y_max: float | None = None
+    mark_x: list[float] = Field(default_factory=list, max_length=3)
+    duration_s: float = Field(default=8.0, ge=2, le=20)
+
+    def model_post_init(self, _ctx) -> None:
+        if not (-1e4 <= self.x_min < self.x_max <= 1e4):
+            raise ValueError("x range must be increasing and reasonable")
+
+
+class Series(BaseModel):
+    name: str = Field(default="", max_length=20)
+    values: list[float] = Field(min_length=2, max_length=10)
+
+
+class LineChartParams(_Base):
+    """Values over time or categories, 1-3 series (numbers must come from supported facts)."""
+    template: Literal["line_chart"] = "line_chart"
+    title: str = Field(default="", max_length=80)
+    labels: list[str] = Field(min_length=2, max_length=10)
+    series: list[Series] = Field(min_length=1, max_length=3)
+    unit: str = Field(default="", max_length=12)
+    duration_s: float = Field(default=8.0, ge=2, le=20)
+
+    def model_post_init(self, _ctx) -> None:
+        if any(len(s.values) != len(self.labels) for s in self.series):
+            raise ValueError("every series needs one value per label")
+
+
+class PieChartParams(_Base):
+    """Shares of a whole as a donut (numbers must come from supported facts)."""
+    template: Literal["pie_chart"] = "pie_chart"
+    title: str = Field(default="", max_length=80)
+    labels: list[str] = Field(min_length=2, max_length=6)
+    values: list[float] = Field(min_length=2, max_length=6)
+    unit: str = Field(default="", max_length=12)
+    duration_s: float = Field(default=8.0, ge=2, le=20)
+
+    @field_validator("values")
+    @classmethod
+    def _positive(cls, v):
+        if any(x != x or x < 0 for x in v) or sum(v) <= 0:
+            raise ValueError("values must be non-negative with a positive total")
+        return v
+
+    def model_post_init(self, _ctx) -> None:
+        if len(self.labels) != len(self.values):
+            raise ValueError("labels and values must have the same length")
+
+
+class NodeGraphParams(_Base):
+    """Nodes and edges (networks, graph algorithms, neural nets); a pulse follows `path`."""
+    template: Literal["node_graph"] = "node_graph"
+    title: str = Field(default="", max_length=80)
+    nodes: list[str] = Field(min_length=2, max_length=10)
+    edges: list[list[str | int]] = Field(default_factory=list, max_length=24)
+    path: list[str | int] = Field(default_factory=list, max_length=10)
+    directed: bool = False
+    layers: list[int] = Field(default_factory=list, max_length=5)  # e.g. [3, 4, 2] lays nodes out as a network
+    duration_s: float = Field(default=8.0, ge=2, le=20)
+
+    @field_validator("edges")
+    @classmethod
+    def _pairs(cls, v):
+        if any(len(e) != 2 for e in v):
+            raise ValueError("each edge is a pair of node names")
+        return v
+
+
 TEMPLATES: dict[str, tuple[str, str, type[BaseModel]]] = {
+    "function_plot": ("function_plot.py", "FunctionPlotScene", FunctionPlotParams),
+    "line_chart": ("line_chart.py", "LineChartScene", LineChartParams),
+    "pie_chart": ("pie_chart.py", "PieChartScene", PieChartParams),
+    "node_graph": ("node_graph.py", "NodeGraphScene", NodeGraphParams),
     "array_algorithm": ("array_algorithm.py", "ArrayAlgorithmScene", ArrayAlgoParams),
     "agent_loop": ("agent_loop.py", "AgentLoopScene", AgentLoopParams),
     "security_flow": ("security_flow.py", "SecurityFlowScene", SecurityParams),

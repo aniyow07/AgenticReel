@@ -16,7 +16,7 @@ from rendering import manim_runner
 from schemas.artifacts import Facts, Plan, Script, Storyboard, StoryboardScene
 from schemas.render_props import BACKDROP_STYLES, PARAM_MODELS, VISUAL_TYPES_OG
 
-PROMPT_VERSION = "storyboarder/v4"
+PROMPT_VERSION = "storyboarder/v5"
 
 SYSTEM = """You are the Storyboarder agent for an OG motion-graphics video. Group consecutive narration segments
 into scenes and choose a trusted visual for each. Allowed visual_type values and their visual_parameters:
@@ -45,13 +45,26 @@ into scenes and choose a trusted visual for each. Allowed visual_type values and
       "tools": [0-4 tool names], "result": str}
     {"template": "security_flow", "title": str, "attacker": str, "attack": str, "defense": str, "target": str,
       "outcome": "blocked|breached", "encrypted": true|false}
+    {"template": "function_plot", "title": str, "functions": [{"expr": "x^2 - 4", "label": ""}] (1-3, plain math
+      in x: + - * / ^, sin cos tan exp log sqrt abs, pi, e), "x_min": -5, "x_max": 5, "mark_x": [roots/peaks]}
+    {"template": "line_chart", "title": str, "labels": [2-10 x labels], "series": [{"name": str, "values": [..]}]
+      (1-3 series, one value per label, ONLY numbers from supported facts), "unit": str}
+    {"template": "pie_chart", "title": str, "labels": [2-6], "values": [..] (ONLY supported numbers), "unit": "%"}
+    {"template": "node_graph", "title": str, "nodes": [2-10 short names], "edges": [["A", "B"], ...],
+      "path": [node names in visit order], "directed": bool, "layers": [3, 4, 2] (only for neural networks)}
+  Use function_plot for graphs of functions (parabolas, growth, trigonometry), line_chart for trends over time,
+  pie_chart for shares of a whole, node_graph for networks, graph algorithms (BFS, DFS, shortest path),
+  routing, social or neural networks.
   Use equation_steps whenever the narration works through math (solving, simplifying, a formula),
   chemical_reaction whenever it describes a reaction, array_algorithm for sorting or searching algorithms,
   agent_loop for AI agents / agentic workflows / tool use, and security_flow for attacks, malware, phishing,
   firewalls or encryption. Only show equations, formulas and names the narration states.
 - end_card: {"text": str, "cta": str}
-Give each scene a "backdrop" (animated background): one of orbs, grid, waves, rays, shapes. Match the mood
-(grid: technical/data, waves: calm/flowing, rays: big reveal or title, shapes: playful, orbs: neutral) and avoid
+Give each scene a "backdrop" (animated background). Match the mood: grid (technical, data), waves (calm,
+flowing), rays (big reveal, title), shapes (playful), orbs (neutral), aurora (dreamy, nature, space),
+constellation (networks, AI, connections), hexgrid (science, chemistry, structure), circuit (computing,
+electronics, software), contours (geography, physics, maps), stripes (energetic, fast facts), matrix (code,
+hacking, cybersecurity). Use a variety across the video and avoid
 using the same backdrop twice in a row.
 Use the first scene as a title and the last as an end_card. Every segment id must be used exactly once, in order.
 Keep on-screen text short (under 8 words per item). Return ONLY JSON:
@@ -173,8 +186,10 @@ def sanitize(ctx: AgentContext, sb: StoryboardLLM, script: Script, facts: Facts)
             try:
                 if not sc.manim_template:
                     raise ValueError("missing manim_template")
-                if sc.manim_template.get("template") == "simple_chart":
-                    vals = sc.manim_template.get("values", [])
+                tpl = sc.manim_template.get("template")
+                if tpl in ("simple_chart", "pie_chart", "line_chart"):
+                    vals = sc.manim_template.get("values", []) if tpl != "line_chart" else \
+                        [v for s in sc.manim_template.get("series", []) for v in (s.get("values") or [])]
                     if any(f"{float(v):g}" not in numbers for v in vals):
                         raise ValueError("chart values are not in supported facts")
                 manim_runner.validate(sc.manim_template)

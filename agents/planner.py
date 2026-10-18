@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from agents.base import AgentContext, ask_llm, brief_summary, words_budget
 from schemas.artifacts import Plan
 
-PROMPT_VERSION = "planner/v2"
+PROMPT_VERSION = "planner/v3"
 
 SYSTEM = """You are the Planner agent of AgentReel, a short-form video generator.
 Plan ONE video for the brief. Adapt to the brief: do not reuse a generic template.
@@ -14,7 +14,7 @@ Rules:
 - OG mode: motion-graphics explainer; you may reserve 0-2 beats for Manim diagrams
   (process, flow, timeline, chart from supplied numbers only, step-by-step equations for math,
   chemical reactions for chemistry, sorting/searching for algorithms, an agent loop for agentic AI, an
-  attack-and-defence flow for cybersecurity). Topics like these should use them.
+  attack-and-defence flow for cybersecurity, function graphs, line and pie charts from supplied numbers, network graphs). Topics like these should use them.
 - minecraft/subway modes: narration-driven over gameplay; keep the structure simple and fast.
 - research_required is true for factual, promotional or awareness content.
 - Return ONLY a JSON object with the requested keys."""

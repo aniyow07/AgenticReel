@@ -134,6 +134,62 @@ def stream(path_mob, color: str, count: int = 3, speed: float = 0.6, radius: flo
     return dots
 
 
+import ast  # noqa: E402
+
+_FUNCS = {"sin": math.sin, "cos": math.cos, "tan": math.tan, "exp": math.exp, "log": math.log, "ln": math.log,
+          "sqrt": math.sqrt, "abs": abs}
+_CONSTS = {"pi": math.pi, "e": math.e}
+_OPS = (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow, ast.USub, ast.UAdd)
+
+
+def compile_expr(text: str):
+    """y = f(x) from a plain math expression ("x^2 - 3*x", "2*sin(x)"). Only numbers, x, + - * / ^ and a few
+    named functions are allowed: the text is parsed, never executed as Python."""
+    src = str(text).replace("^", "**").replace("−", "-").replace("×", "*")
+    tree = ast.parse(src, mode="eval")
+
+    def ev(n, x):
+        if isinstance(n, ast.Expression):
+            return ev(n.body, x)
+        if isinstance(n, ast.Constant) and isinstance(n.value, (int, float)) and not isinstance(n.value, bool):
+            return float(n.value)  # floats overflow cleanly; huge integer powers would hang
+        if isinstance(n, ast.Name):
+            if n.id == "x":
+                return x
+            if n.id in _CONSTS:
+                return _CONSTS[n.id]
+        if isinstance(n, ast.UnaryOp) and isinstance(n.op, _OPS):
+            v = ev(n.operand, x)
+            return -v if isinstance(n.op, ast.USub) else v
+        if isinstance(n, ast.BinOp) and isinstance(n.op, _OPS):
+            a, b = ev(n.left, x), ev(n.right, x)
+            if isinstance(n.op, ast.Add):
+                return a + b
+            if isinstance(n.op, ast.Sub):
+                return a - b
+            if isinstance(n.op, ast.Mult):
+                return a * b
+            if isinstance(n.op, ast.Div):
+                return a / b
+            return a ** b
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in _FUNCS and len(n.args) == 1:
+            return _FUNCS[n.func.id](ev(n.args[0], x))
+        raise ValueError(f"not allowed in a function: {ast.dump(n)[:40]}")
+
+    try:
+        ev(tree, 0.5)  # raises ValueError now for anything outside the allowed grammar
+    except (ArithmeticError, OverflowError):
+        pass  # a pole or domain error at 0.5 is fine; it is only a gap in the curve
+
+    def f(x: float) -> float:
+        try:
+            y = ev(tree, x)
+            return float(y) if isinstance(y, (int, float)) and math.isfinite(y) else float("nan")
+        except (ArithmeticError, ValueError, OverflowError):
+            return float("nan")
+    return f
+
+
 __all__ = [
     "BG", "SURFACE", "PRIMARY", "ACCENT", "TEXT", "MUTED", "FONT", "DEFAULT",
     "load_params", "setup_frame", "clean", "label", "fit_width", "scene_seconds", "colors", "ambient", "stream",

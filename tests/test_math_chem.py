@@ -37,6 +37,28 @@ def test_cs_ai_security_params():
     assert m.outcome == "blocked"
 
 
+@pytest.mark.parametrize("expr,ok", [
+    ("x^2 - 4", True), ("2*sin(x) + e", True), ("sqrt(abs(x))/pi", True),
+    ("__import__('os').system('x')", False), ("x.real", False), ("open('f')", False), ("[x for x in ()]", False),
+    ("lambda: 1", False), ("sin(x, 2)", False),
+])
+def test_function_plot_only_accepts_plain_math(expr, ok):
+    params = {"template": "function_plot", "functions": [{"expr": expr}]}
+    if ok:
+        manim_runner.validate(params)
+    else:
+        with pytest.raises(Exception):
+            manim_runner.validate(params)
+
+
+def test_chart_and_graph_params():
+    with pytest.raises(Exception):  # a series without one value per label
+        manim_runner.validate({"template": "line_chart", "labels": ["a", "b", "c"], "series": [{"values": [1, 2]}]})
+    manim_runner.validate({"template": "pie_chart", "labels": ["a", "b"], "values": [60, 40], "unit": "%"})
+    manim_runner.validate({"template": "node_graph", "nodes": ["A", "B", "C"], "edges": [["A", "B"], ["B", "C"]],
+                           "path": ["A", "B", "C"]})
+
+
 def test_sort_steps_really_sort():
     import importlib.util
     from pathlib import Path
