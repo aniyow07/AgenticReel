@@ -14,7 +14,8 @@ from pydantic import BaseModel, Field
 from schemas.artifacts import SegmentAudio
 
 SEGMENT_GAP_S = 0.12  # pause inserted between narration chunks
-TAIL_S = 0.6  # hold after the last word
+TAIL_S = 1.0  # after the last narration chunk: a short hold, then picture and sound fade out together
+FADE_OUT_S = 0.7  # the closing fade (the last FADE_OUT_S of TAIL_S), applied in the final encode
 
 
 class TimedCaption(BaseModel):
@@ -54,6 +55,7 @@ def layout_segments(segments: list[SegmentAudio], gap_s: float = SEGMENT_GAP_S, 
 
 
 _WORD = re.compile(r"\S+")
+_TAG = re.compile(r"\[[a-z ]{2,24}\]")  # voice tags such as [laugh] are performed, never shown as captions
 
 
 def _phrases(words: list[str], max_words: int) -> list[list[int]]:
@@ -91,7 +93,7 @@ def build_captions(segment_texts: dict[str, str], segments: list[SegmentAudio], 
     caps: list[TimedCaption] = []
     for seg in segments:
         p = place[seg.segment_id]
-        words = _WORD.findall(segment_texts[seg.segment_id])
+        words = _WORD.findall(_TAG.sub(" ", segment_texts[seg.segment_id]))
         if not words:
             continue
         timings: list[tuple[float, float]] | None = None

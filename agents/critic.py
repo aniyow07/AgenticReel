@@ -11,7 +11,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from agents.base import AgentContext, ask_llm, brief_summary
+from agents.base import AgentContext, ask_llm, brief_summary, length_window
 from agents.editor import output_profile
 from agents.scriptwriter import check_script
 from core.mathtext import KEEP_KEYS, has_raw_latex
@@ -74,8 +74,10 @@ def run(ctx: AgentContext, script: Script, storyboard: Storyboard, facts: Facts,
             check("duration_target", PROD_MIN_S - 0.5 <= info.duration <= PROD_MAX_S + 0.5,
                   f"{info.duration:.1f}s (allowed {PROD_MIN_S}-{PROD_MAX_S}s, brief asked {brief.duration_s:.0f}s)",
                   route="scripting")
-            check("duration_close_to_brief", abs(info.duration - brief.duration_s) <= max(6, brief.duration_s * 0.15),
-                  f"{info.duration:.1f}s vs {brief.duration_s:.0f}s", severity="warning", route="scripting")
+            lo, hi = length_window(brief.duration_s)
+            check("duration_close_to_brief", lo - 0.1 <= info.duration <= hi + 0.1,
+                  f"{info.duration:.1f}s vs {brief.duration_s:.0f}s (window {lo:.0f}-{hi:.0f}s)", severity="warning",
+                  route="scripting")
         size_mb = info.size_bytes / 1e6
         check("file_size", size_mb <= ctx.settings.max_output_mb, f"{size_mb:.1f} MB", route="ffmpeg")
         try:

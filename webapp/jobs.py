@@ -143,6 +143,7 @@ def summary(d: Path, state: dict | None = None) -> dict:
         "is_test": bool(state.get("is_test_render")),
         "has_video": (d / "final.mp4").exists(),
         "voice": brief.get("voice") or "",
+        "tts_engine": brief.get("tts_engine") or "",
         "group": _group_key(brief, state),
     }
     if is_running:
@@ -158,6 +159,14 @@ SCENE_KINDS = {
     "array_algorithm": "Algorithm", "agent_loop": "Agent loop", "security_flow": "Security",
     "function_plot": "Graph", "line_chart": "Line chart", "pie_chart": "Pie chart", "node_graph": "Network",
     "cycle_diagram": "Cycle", "venn_diagram": "Venn diagram", "pyramid": "Pyramid", "mind_map": "Mind map",
+    "orbit_3d": "3D orbits", "surface_3d": "3D surface", "bar_chart_3d": "3D bars",
+    "dna_helix_3d": "3D DNA", "molecule_3d": "3D molecule", "globe_3d": "3D globe", "vector_field_3d": "3D field",
+    "crystal_lattice_3d": "3D crystal", "neural_net_3d": "3D neural net", "layer_stack_3d": "3D layers",
+    "planet_layers_3d": "3D shells", "wave_3d": "3D wave", "solids_3d": "3D solids", "galaxy_3d": "3D galaxy",
+    "before_after": "Comparison", "domino_chain": "Cause and effect", "stat_reveal": "Big number",
+    "quote_card": "Quote", "pros_cons": "Pros and cons", "ranking": "Ranking", "funnel": "Funnel",
+    "myth_fact": "Myth vs fact", "spotlight": "Spotlight", "roadmap": "Roadmap", "decision_tree": "Decision",
+    "carousel_3d": "3D carousel", "podium_3d": "3D podium", "cube_faces_3d": "3D cube", "spiral_timeline_3d": "3D timeline",
 }
 
 
@@ -169,11 +178,17 @@ def scenes_preview(d: Path) -> list[dict]:
         mt = sc.get("manim_template") or {}
         vp = sc.get("visual_parameters") or {}
         kind = SCENE_KINDS.get(mt.get("template") or sc.get("visual_type"), (sc.get("visual_type") or "").replace("_", " "))
-        items = (mt.get("steps") or mt.get("inputs") or [e.get("label", "") for e in mt.get("events") or []]
+        items = (mt.get("steps") or mt.get("inputs")
+                 or [e.get("label", "") if isinstance(e, dict) else e for e in mt.get("events") or []]
                  or mt.get("lines") or mt.get("reactants") or mt.get("nodes") or mt.get("stages") or mt.get("levels")
                  or [s.get("name", "") for s in mt.get("sets") or mt.get("branches") or []]
+                 or mt.get("links") or mt.get("stops") or mt.get("items") or mt.get("places") or mt.get("faces")
                  or [f.get("expr", "") for f in mt.get("functions") or []] or [str(v) for v in mt.get("values") or []]
                  or [x for x in (mt.get("attack"), mt.get("defense"), mt.get("target")) if x]
+                 or (mt.get("pros") or []) + (mt.get("cons") or []) or mt.get("words")
+                 or (mt.get("left_points") or []) + (mt.get("right_points") or [])
+                 or [x.get("myth", "") for x in mt.get("pairs") or []] or [o.get("choice", "") for o in mt.get("options") or []]
+                 or [x for x in (mt.get("quote"),) if x]
                  or mt.get("labels") or [s.get("text", "") if isinstance(s, dict) else s for s in mt.get("lines") or []]
                  or vp.get("points") or vp.get("items") or [])
         text = sc.get("on_screen_text") or mt.get("title") or vp.get("title") or vp.get("heading") or vp.get("text") or ""
@@ -188,7 +203,8 @@ def detail(d: Path) -> dict:
     out["progress"] = progress(state, d)
     brief = read_json(d / "brief.json") or {}
     out["brief"] = {k: brief.get(k) for k in ("topic", "audience", "tone", "content_type", "language",
-                                               "subtitle_language", "format", "voice", "motion", "duration_s")}
+                                               "subtitle_language", "format", "voice", "tts_engine", "motion",
+                                               "duration_s")}
     out["sources"] = [Path(f).name for f in brief.get("source_files") or []]
     script = read_json(d / "script.json") or {}
     out["script"] = [s.get("text", "") for s in script.get("segments", [])]

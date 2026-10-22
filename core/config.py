@@ -49,13 +49,16 @@ class Settings:
     execution_mode: ExecutionMode = "AI_PREFERRED"
     llm_timeout_s: float = 90
     llm_max_retries: int = 2
-    tts_provider: str = "edge"
-    tts_voice: str = "en-US-AriaNeural"
+    tts_provider: str = "chatterbox"
+    tts_voice: str = "default"
+    chatterbox_voice: str = "default"     # default voice when a video picks the Natural (Chatterbox) engine
+    edge_voice: str = "en-US-AriaNeural"  # default voice when a video picks the Classic (Edge) engine
     tts_rate: str = "+10%"
     max_repair_attempts: int = 2
     max_output_mb: float = 100
     max_upload_mb: float = 50
     online_research: bool = False
+    gpu: str = "auto"  # "auto" | "on" | "off": NVENC encoding and Remotion's GPU backend (rendering/gpu.py)
     outputs_dir: Path = ROOT / "outputs"
     remotion_dir: Path = ROOT / "remotion"
     assets_dir: Path = ROOT / "assets"
@@ -67,6 +70,7 @@ class Settings:
         if mode not in ("AI_PREFERRED", "LOCAL_ONLY", "AI_REQUIRED"):
             mode = "AI_PREFERRED"
         provider = (e("LLM_PROVIDER") or "openrouter").strip().lower()
+        tts_engine = (e("TTS_ENGINE") or "chatterbox").strip().lower()
         return cls(
             llm_provider=provider if provider in ("openrouter", "gemini") else "openrouter",
             gemini_api_key=(e("GEMINI_API_KEY") or "").strip(),
@@ -84,12 +88,17 @@ class Settings:
             max_api_spend_usd=_float(e("MAX_API_SPEND_USD"), 5.0),
             execution_mode=mode,  # type: ignore[arg-type]
             llm_timeout_s=_float(e("OPENROUTER_TIMEOUT_S"), 90),
-            tts_provider=(e("TTS_PROVIDER") or "edge").strip().lower(),
-            tts_voice=(e("TTS_VOICE") or "en-US-AriaNeural").strip(),
+            # TTS_ENGINE=chatterbox (local, default) or edge (the old online voices: TTS_PROVIDER/TTS_VOICE apply)
+            tts_provider=("chatterbox" if tts_engine == "chatterbox" else (e("TTS_PROVIDER") or "edge").strip().lower()),
+            tts_voice=((e("CHATTERBOX_VOICE") or "default") if tts_engine == "chatterbox"
+                       else (e("TTS_VOICE") or "en-US-AriaNeural")).strip(),
+            chatterbox_voice=(e("CHATTERBOX_VOICE") or "default").strip(),
+            edge_voice=(e("TTS_VOICE") or "en-US-AriaNeural").strip(),
             tts_rate=(e("TTS_RATE") or "+10%").strip(),
             max_repair_attempts=int(_float(e("MAX_REPAIR_ATTEMPTS"), 2)),
             max_output_mb=_float(e("MAX_OUTPUT_MB"), 100),
             online_research=_bool(e("ONLINE_RESEARCH"), False),
+            gpu=g if (g := (e("AGENTREEL_GPU") or "auto").strip().lower()) in ("auto", "on", "off") else "auto",
             outputs_dir=Path(e("AGENTREEL_OUTPUT_DIR") or ROOT / "outputs"),
         )
 

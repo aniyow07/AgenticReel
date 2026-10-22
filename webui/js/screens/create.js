@@ -2,21 +2,26 @@
 import { $, $$, app, esc } from '../core/dom.js';
 import { api, post } from '../core/api.js';
 import { icon } from '../core/icons.js';
-import { FORMATS, LANGS, MOTIONS, SPEEDS, TYPES, WRITING_MODES, lengthChoices } from '../config.js';
+import { FORMATS, GPU_MODES, LANGS, MOTIONS, SPEEDS, TYPES, WRITING_MODES, lengthChoices } from '../config.js';
 import { state } from '../state.js';
 import { go, currentRoute } from '../router.js';
 import { groupHeads, refreshJobs } from '../services/jobs.js';
 import { segmented } from '../components/segmented.js';
 import { selectTile, styleTiles, wirePreviews } from '../components/styleTiles.js';
-import { voiceSelect } from '../components/voiceSelect.js';
+import { engineSwitch, voiceSelect } from '../components/voiceSelect.js';
+import { defaultEngine } from '../services/voices.js';
 import { fileChips } from '../components/fileChips.js';
 import { recentStrip } from '../components/recentStrip.js';
 import { showErrors } from '../components/errorList.js';
 
-const SEG_FIELD = { Length: 'duration', Format: 'format', 'Camera motion': 'motion', 'Voice speed': 'speed' };
+const SEG_FIELD = { Length: 'duration', Format: 'format', 'Camera motion': 'motion', 'Voice speed': 'speed', 'Voice engine': 'tts_engine' };
 
+// null = the server's ONLINE_RESEARCH default, until the user ticks or unticks the box
+const wikiOn = (f) => (f.wikipedia == null ? !!(state.info && state.info.online_research) : f.wikipedia);
 const field = (id, label, control) => '<div class="field"><label for="' + id + '">' + label + '</label>' + control + '</div>';
 const options = (items, selected) => items.map(([v, l]) => '<option value="' + v + '"' + (v === selected ? ' selected' : '') + '>' + esc(l) + '</option>').join('');
+// the note says whether this computer has an NVIDIA GPU that can encode video
+const gpuNote = () => (!state.info ? '' : state.info.gpu_found ? 'NVIDIA GPU found' : 'no NVIDIA GPU found');
 const langOptions = (selected) => LANGS.map((l) => '<option' + (l === selected ? ' selected' : '') + '>' + l + '</option>').join('');
 
 function briefSection(f) {
@@ -41,7 +46,8 @@ function optionsSection(f) {
     '<div class="field"><span class="label">Length</span><div id="len">' + segmented('Length', lengthChoices(f.quick_test), f.duration) + '</div></div>' +
     '<div class="field"><span class="label">Format</span>' + segmented('Format', FORMATS, f.format) + '</div>' +
     '<div class="field"><label for="ctype">Type</label><select id="ctype" class="input">' + options(TYPES, f.content_type) + '</select></div>' +
-    '<div class="field"><label for="voice">Voice</label>' + voiceSelect('voice', f.voice) + '</div>' +
+    '<div class="field"><span class="label">Voices</span>' + engineSwitch('voice', f.tts_engine || defaultEngine()) + '</div>' +
+    '<div class="field"><label for="voice">Voice</label>' + voiceSelect('voice', f.voice, f.tts_engine || defaultEngine()) + '</div>' +
     '<div class="field"><span class="label">Voice speed</span>' + segmented('Voice speed', SPEEDS, f.speed) + '</div>' +
     '<div class="field" id="motion-field"' + (f.mode === 'og' ? ' hidden' : '') + '><span class="label">Camera motion</span>' + segmented('Camera motion', MOTIONS, f.motion) + '</div>' +
   '</section>';
@@ -49,7 +55,7 @@ function optionsSection(f) {
 
 function moreOptions(f) {
   return '<section class="disclosure">' +
-    '<button type="button" id="adv-btn" aria-expanded="' + f.adv + '" aria-controls="adv">' + icon.chev + ' More options <span class="opt">audience, tone, language, must-haves</span></button>' +
+    '<button type="button" id="adv-btn" aria-expanded="' + f.adv + '" aria-controls="adv">' + icon.chev + ' More options <span class="opt">audience, tone, language, must-haves, GPU</span></button>' +
     '<div id="adv"' + (f.adv ? '' : ' hidden') + '>' +
       '<div class="grid2">' +
         field('aud', 'Audience', '<input id="aud" class="input" type="text" maxlength="200" placeholder="General audience" value="' + esc(f.audience) + '">') +
@@ -60,9 +66,11 @@ function moreOptions(f) {
         field('avoid', 'Avoid <span class="opt">one per line</span>', '<textarea id="avoid" class="input" rows="3">' + esc(f.avoid) + '</textarea>') +
         field('cta', 'Ending line <span class="opt">optional</span>', '<input id="cta" class="input" type="text" maxlength="200" placeholder="Follow for part 2" value="' + esc(f.cta) + '">') +
         field('ai', 'Writing', '<select id="ai" class="input">' + WRITING_MODES.map(([v, l]) => '<option value="' + v + '"' + (v === f.exec_mode ? ' selected' : '') + '>' + l + '</option>').join('') + '</select>') +
+        field('gpu', 'Use GPU <span class="opt">' + gpuNote() + '</span>', '<select id="gpu" class="input">' + options(GPU_MODES, f.gpu) + '</select>') +
       '</div>' +
       '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 28px;margin-top:16px">' +
         '<label class="check"><input type="checkbox" id="quick"' + (f.quick_test ? ' checked' : '') + '> Quick test render <span class="opt" style="color:var(--faint)">short, small, marked as a test</span></label>' +
+        '<label class="check"><input type="checkbox" id="wiki"' + (wikiOn(f) ? ' checked' : '') + '> Also use Wikipedia <span class="opt" style="color:var(--faint)">adds to your files, which come first</span></label>' +
         '<label class="check"><input type="checkbox" id="fresh"' + (f.fresh_script ? ' checked' : '') + '> Write a fresh script</label>' +
         '<label class="check">Seed <input id="seed" class="input" type="number" value="' + esc(f.seed) + '" style="width:90px;height:40px"></label>' +
       '</div>' +
@@ -123,7 +131,7 @@ function wire() {
   const bind = (id, key, ev) => { const el = $('#' + id); if (el) el.addEventListener(ev || 'input', () => { f[key] = el.type === 'checkbox' ? el.checked : el.value; }); };
   bind('brief', 'topic'); bind('aud', 'audience'); bind('tone', 'tone'); bind('must', 'must'); bind('avoid', 'avoid');
   bind('cta', 'cta'); bind('ctype', 'content_type', 'change'); bind('voice', 'voice', 'change'); bind('lang', 'language', 'change');
-  bind('slang', 'subtitle_language', 'change'); bind('ai', 'exec_mode', 'change'); bind('fresh', 'fresh_script', 'change'); bind('seed', 'seed');
+  bind('slang', 'subtitle_language', 'change'); bind('ai', 'exec_mode', 'change'); bind('fresh', 'fresh_script', 'change'); bind('wiki', 'wikipedia', 'change'); bind('seed', 'seed'); bind('gpu', 'gpu', 'change');
 
   $('#quick').addEventListener('change', (e) => {
     f.quick_test = e.target.checked;
@@ -179,10 +187,10 @@ async function generate() {
   try {
     const res = await post('/api/jobs', {
       topic: f.topic, mode: f.mode, duration_s: f.duration, format: f.format, content_type: f.content_type,
-      voice: f.voice, speed: f.speed, motion: f.motion, audience: f.audience, tone: f.tone, language: f.language,
+      voice: f.voice, tts_engine: f.tts_engine || undefined, speed: f.speed, motion: f.motion, audience: f.audience, tone: f.tone, language: f.language,
       subtitle_language: f.subtitle_language || f.language, must_include: f.must, must_avoid: f.avoid, cta: f.cta,
       source_files: f.files.map((x) => x.path), exec_mode: f.exec_mode || undefined, quick_test: f.quick_test,
-      seed: Number(f.seed) || 42, fresh_script: f.fresh_script,
+      seed: Number(f.seed) || 42, fresh_script: f.fresh_script, gpu: f.gpu || undefined, online_research: f.wikipedia == null ? undefined : f.wikipedia,
     });
     refreshJobs();
     go('/job/' + res.id);

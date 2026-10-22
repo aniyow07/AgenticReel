@@ -123,6 +123,56 @@ def test_invalid_llm_storyboard_is_sanitised(make_ctx):
     assert sb.validate_against(script, ctx.brief.duration_s, tol=0.05) == []
 
 
+
+def test_at_most_two_3d_scenes(make_ctx):
+    ctx = make_ctx(mode="og")
+    plan = planner.run(ctx)
+    facts = Facts()
+    script = scriptwriter.run(ctx, plan, facts)
+    ids = [s.segment_id for s in script.segments]
+    assert len(ids) >= 3
+    tpls = [{"template": "solids_3d", "title": "Shapes", "shapes": ["cube"]}, {"template": "galaxy_3d", "title": "G"},
+            {"template": "wave_3d", "title": "Waves", "kind": "transverse"}]
+    sb = storyboarder.StoryboardLLM(scenes=[
+        storyboarder.SceneLLM(segment_ids=ids[i:i + 1] if i < 2 else ids[2:], visual_type="manim",
+                              manim_template=dict(t)) for i, t in enumerate(tpls)])
+    fixed, notes = storyboarder.sanitize(ctx, storyboarder.fix_coverage(sb, script), script, facts)
+    kept = [s.manim_template["template"] for s in fixed.scenes if s.visual_type == "manim"]
+    assert kept == ["solids_3d", "wave_3d"]  # the middle one would have been a second 3D scene in a row
+    assert len(kept) <= storyboarder.MAX_3D_SCENES and any("3D" in n for n in notes)
+
+
+def test_picker_never_repeats_a_template(make_ctx):
+    """A template is used once per video; the repeat keeps its data as a Remotion visual."""
+    ctx = make_ctx(mode="og")
+    plan = planner.run(ctx)
+    facts = Facts()
+    script = scriptwriter.run(ctx, plan, facts)
+    ids = [s.segment_id for s in script.segments]
+    cyc = {"template": "cycle_diagram", "title": "Loop", "stages": ["Plan", "Do", "Check"]}
+    tpls = [cyc, dict(cyc), {"template": "solids_3d", "title": "S", "shapes": ["cube"]}]
+    sb = storyboarder.StoryboardLLM(scenes=[
+        storyboarder.SceneLLM(segment_ids=ids[i:i + 1] if i < 2 else ids[2:], visual_type="manim",
+                              manim_template=dict(t)) for i, t in enumerate(tpls)])
+    fixed, notes = storyboarder.sanitize(ctx, storyboarder.fix_coverage(sb, script), script, facts)
+    kept = [s.manim_template["template"] for s in fixed.scenes if s.visual_type == "manim"]
+    assert kept == ["cycle_diagram", "solids_3d"]
+    assert any("already used" in n for n in notes)
+    assert fixed.scenes[1].visual_type in ("key_points", "process", "text_reveal")
+
+
+def test_catalog_covers_every_template_and_shuffles():
+    from agents import template_catalog as tc
+    from rendering import manim_runner
+    assert set(tc.BY_NAME) == set(manim_runner.TEMPLATES)
+    firsts = {tc.catalog_text(seed).splitlines()[1].split(":")[0].strip() for seed in range(20)}
+    assert len(firsts) >= 5  # no template sits at the top of the list for every video
+    assert "domino_chain" in tc.suggest("the chain of causes that led to the 2008 crash")
+    from collections import Counter
+    fresh = tc.suggest("five myths about sleep habits", Counter())
+    tired = tc.suggest("five myths about sleep habits", Counter({fresh[0]: 3}))
+    assert fresh[0] != tired[0]  # heavy recent use pushes a template down the list
+
 def test_brainrot_storyboard_is_gameplay_only(make_ctx):
     ctx = make_ctx(mode="subway", content_type="fictional_story", topic="A ghost story on a train")
     plan = planner.run(ctx)

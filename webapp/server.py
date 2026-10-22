@@ -11,7 +11,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from webapp import jobs, library, runner, system, uploads, voices
-from webapp.config import MAX_UPLOAD, STATIC, UI_ASSETS, job_dir
+from webapp.config import ALLOWED_HOSTS, MAX_UPLOAD, STATIC, UI_ASSETS, job_dir
 
 # Windows sometimes maps .js to text/plain in the registry; module scripts need the right type.
 mimetypes.add_type("text/javascript", ".js")
@@ -137,15 +137,16 @@ class Handler(BaseHTTPRequestHandler):
         if parts == ["info"]:
             return self.send_json(system.info())
         if parts == ["voices"]:
-            return self.send_json(voices.voices())
+            return self.send_json(voices.voices((parse_qs(url.query).get("engine") or [""])[0]))
         if parts == ["voices", "sample"]:
             qs = parse_qs(url.query)
             try:
-                path = voices.sample((qs.get("voice") or [""])[0], int((qs.get("speed") or ["0"])[0]))
+                path = voices.sample((qs.get("voice") or [""])[0], int((qs.get("speed") or ["0"])[0]),
+                                     (qs.get("engine") or [""])[0])
             except ValueError as e:
                 return self.send_error_json(400, str(e))
-            except Exception:  # noqa: BLE001 - offline or the TTS service refused
-                return self.send_error_json(502, "Could not record a sample. Check your internet connection.")
+            except Exception as e:  # noqa: BLE001 - voice model not set up, or (Edge) offline
+                return self.send_error_json(502, f"Could not record a sample: {str(e)[:200]}")
             return self.send_file(path, cache=True)
         if parts == ["jobs"]:
             return self.send_json(jobs.list_all())
@@ -170,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
     # ---------- POST ----------
     def do_POST(self):
         url, parts = self._parts()
-        if self.headers.get("Origin") not in (None, f"http://{self.headers.get('Host')}"):
+        if not self._same_origin():
             return self.send_error_json(403, "Cross-site request refused.")
         try:
             if parts == ["api", "upload"]:
@@ -186,6 +187,21 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_error_json(404, "Not found")
         except Exception as e:  # noqa: BLE001
             return self.send_error_json(400, runner.friendly_errors(e))
+
+    def _same_origin(self) -> bool:
+        """True for requests from this app's own page: locally over http, or over https through a
+        tunnel (Cloudflare quick tunnel, or a host in AGENTREEL_ALLOWED_HOSTS) that kept or forwarded the host."""
+        origin = self.headers.get("Origin")
+        host = (self.headers.get("Host") or "").lower()
+        if origin is None or origin.lower() == f"http://{host}":
+            return True
+        o = urlparse(origin.lower())
+        if o.scheme != "https" or not o.hostname:
+            return False
+        forwarded = (self.headers.get("X-Forwarded-Host") or "").split(",")[0].strip().lower()
+        if o.netloc not in (host, forwarded):
+            return False
+        return o.hostname.endswith(".trycloudflare.com") or o.hostname in ALLOWED_HOSTS
 
     def _job_action(self, job_id: str, action: str):
         d = job_dir(job_id)

@@ -6,7 +6,7 @@ import { initRouter, currentRoute, route } from './router.js';
 import { initTheme } from './ui/header.js';
 import { initShortcuts } from './ui/shortcuts.js';
 import { refreshJobs } from './services/jobs.js';
-import { loadVoices } from './services/voices.js';
+import { initEngineSwitch, loadVoices } from './services/voices.js';
 import { initVoicePreview } from './services/voicePreview.js';
 import { handleCreateClick } from './screens/create.js';
 
@@ -15,6 +15,7 @@ async function boot() {
   initRouter();
   initShortcuts();
   initVoicePreview();
+  initEngineSwitch();
   app.addEventListener('click', handleCreateClick);
   try { state.info = await api('/api/info'); } catch (e) { /* header stays empty */ }
   await refreshJobs();

@@ -1,0 +1,50 @@
+{
+  "default": {
+    "label": "Built-in",
+    "gender": "Female"
+  },
+  "atlas": {
+    "label": "Atlas · deep storyteller",
+    "gender": "Male"
+  },
+  "kai": {
+    "label": "Kai · calm, low, soft-spoken",
+    "gender": "Male"
+  },
+  "jack": {
+    "label": "Jack · lively and energetic",
+    "gender": "Male"
+  },
+  "grace": {
+    "label": "Grace · warm and steady",
+    "gender": "Female"
+  },
+  "zoe": {
+    "label": "Zoe · bright and upbeat",
+    "gender": "Female"
+  },
+  "nora": {
+    "label": "Nora · expressive",
+    "gender": "Female"
+  },
+  "ren": {
+    "label": "Ren",
+    "gender": "Male",
+    "accent": "Japanese"
+  },
+  "haruto": {
+    "label": "Haruto · deeper, slower",
+    "gender": "Male",
+    "accent": "Japanese"
+  },
+  "yuki": {
+    "label": "Yuki",
+    "gender": "Female",
+    "accent": "Japanese"
+  },
+  "sakura": {
+    "label": "Sakura · brighter",
+    "gender": "Female",
+    "accent": "Japanese"
+  }
+}

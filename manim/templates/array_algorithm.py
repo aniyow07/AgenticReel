@@ -1,4 +1,4 @@
-"""Array algorithms run for real on the given numbers: bubble, selection and insertion sort swap bars,
+"""Array algorithms run for real on the given numbers: bubble, selection, insertion and quick sort swap bars,
 linear and binary search narrow the range until the target is found. The template computes every step
 itself, so the animation is always correct whatever the storyboard asked for."""
 from __future__ import annotations
@@ -39,6 +39,29 @@ def sort_steps(algo: str, a: list[int]) -> list[tuple]:
                 a[i], a[m] = a[m], a[i]
                 ev.append(("swap", i, m))
             ev.append(("done", i))
+    elif algo == "quick_sort":
+        def part(lo: int, hi: int) -> None:  # Lomuto partition around the last value
+            if lo > hi:
+                return
+            if lo == hi:
+                ev.append(("done", lo))
+                return
+            ev.append(("pivot", hi))
+            i = lo
+            for j in range(lo, hi):
+                ev.append(("cmp", j, hi))
+                if a[j] < a[hi]:
+                    if i != j:
+                        a[i], a[j] = a[j], a[i]
+                        ev.append(("swap", i, j))
+                    i += 1
+            if i != hi:
+                a[i], a[hi] = a[hi], a[i]
+                ev.append(("swap", i, hi))
+            ev.append(("done", i))
+            part(lo, i - 1)
+            part(i + 1, hi)
+        part(0, n - 1)
     else:  # insertion_sort
         ev.append(("done", 0))
         for i in range(1, n):
@@ -124,13 +147,15 @@ class ArrayAlgorithmScene(Scene):
 
         order = list(range(n))  # order[k] = index into bars of the bar at position k
         done_color = C["accent"]
+        pivot = None  # quick sort: the bar the current partition compares against
         for ev in events:
             if ev[0] == "cmp":
                 i, j = order[ev[1]], order[ev[2]]
                 say(f"compare {vals_at(bars, i)} and {vals_at(bars, j)}")
                 self.play(bars[i][0].animate.set_fill(C["mutedText"]), bars[j][0].animate.set_fill(C["mutedText"]),
                           run_time=dt * 0.5)
-                self.play(bars[i][0].animate.set_fill(C["primary"]), bars[j][0].animate.set_fill(C["primary"]),
+                back = lambda k: C["text"] if k == pivot else C["primary"]  # noqa: E731
+                self.play(bars[i][0].animate.set_fill(back(i)), bars[j][0].animate.set_fill(back(j)),
                           run_time=dt * 0.3)
             elif ev[0] == "swap":
                 pi, pj = ev[1], ev[2]
@@ -140,7 +165,13 @@ class ArrayAlgorithmScene(Scene):
                 self.play(bars[i].animate.shift([xj - xi, 0, 0]), bars[j].animate.shift([xi - xj, 0, 0]),
                           run_time=dt)
                 order[pi], order[pj] = j, i
+            elif ev[0] == "pivot":
+                pivot = order[ev[1]]
+                say(f"pivot {vals_at(bars, pivot)}: smaller ones go left")
+                self.play(bars[pivot][0].animate.set_fill(C["text"]), run_time=dt)
             elif ev[0] == "done":
+                if order[ev[1]] == pivot:
+                    pivot = None
                 b = bars[order[ev[1]]]
                 b[0].set_fill(done_color)
             elif ev[0] == "range":

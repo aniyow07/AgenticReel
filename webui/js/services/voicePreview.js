@@ -1,4 +1,5 @@
-// Plays a short sample of a voice (recorded once by the server with Edge TTS, then cached).
+// Plays a short sample of a voice (recorded once by the server, then cached). The first sample after the
+// app starts takes a little longer while the voice model loads.
 // One sample plays at a time; while it plays, picking another voice plays that one instead.
 import { $ } from '../core/dom.js';
 import { icon } from '../core/icons.js';
@@ -26,19 +27,20 @@ function stop() {
 function play(selectId) {
   const sel = $('#' + selectId);
   if (!sel) return;
-  const voice = sel.value || (state.info && state.info.default_voice) || 'en-US-AriaNeural';
+  const voice = sel.value; // empty = the engine's default voice, which the server knows
   const speed = Number(state.form.speed) || 0;
   stop();
   playingFor = selectId;
   setButton(selectId, 'loading');
-  const a = new Audio('/api/voices/sample?voice=' + encodeURIComponent(voice) + '&speed=' + speed);
+  const a = new Audio('/api/voices/sample?voice=' + encodeURIComponent(voice) + '&speed=' + speed +
+    '&engine=' + encodeURIComponent(sel.dataset.engine || ''));
   audio = a;
   a.addEventListener('playing', () => { if (audio === a) setButton(selectId, 'playing'); });
   a.addEventListener('ended', () => { if (audio === a) stop(); });
   a.addEventListener('error', () => {
     if (audio !== a) return;
     stop();
-    toast('Could not play a sample of that voice. Check your internet connection.');
+    toast(sel.dataset.engine === 'edge' ? 'Could not play that voice. Classic voices need an internet connection.' : 'Could not play a sample of that voice.');
   });
   a.play().catch(() => {});
 }

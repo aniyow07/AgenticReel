@@ -9,7 +9,6 @@ not supported on Windows shells.
 from __future__ import annotations
 
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -19,6 +18,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+from rendering import gpu as gpu_switch
 from rendering.media_utils import MediaError, probe, sha256
 from schemas.render_props import COMPOSITION_FOR_MODE, RenderProps
 
@@ -111,7 +111,8 @@ def check_staged_media(props: RenderProps, public_dir: Path) -> list[str]:
 
 
 def render(props: RenderProps, public_dir: Path, props_path: Path, output: Path, *, concurrency: int | None = None,
-           timeout: float = 3600, crf: int = 20, scale: float | None = None) -> RenderResult:
+           timeout: float = 3600, crf: int = 20, scale: float | None = None,
+           gpu: bool | None = None) -> RenderResult:
     comp = COMPOSITION_FOR_MODE[props.mode]
     t0 = time.time()
     props = RenderProps.model_validate(props.model_dump())  # re-validate after any edits
@@ -125,7 +126,10 @@ def render(props: RenderProps, public_dir: Path, props_path: Path, output: Path,
     cmd = [*cli_command(), "render", ENTRY, comp, str(output.resolve()), f"--props={props_path.resolve()}",
            f"--public-dir={public_dir.resolve()}", "--codec=h264", "--pixel-format=yuv420p", f"--crf={crf}",
            "--audio-codec=aac", "--log=info", "--overwrite"]
-    cmd.append(f"--concurrency={concurrency or max(1, min(6, (os.cpu_count() or 2) // 2))}")
+    flags = gpu_switch.remotion_flags(gpu)
+    if concurrency:
+        flags = [f for f in flags if not f.startswith("--concurrency")] + [f"--concurrency={concurrency}"]
+    cmd += flags
     if scale:
         cmd.append(f"--scale={scale}")
     try:

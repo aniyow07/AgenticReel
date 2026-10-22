@@ -117,13 +117,35 @@ def test_voice_sample_is_recorded_once_and_cached(server, tmp_path, monkeypatch)
             out.write_bytes(b"RIFF" + b"\0" * 2000)
 
     import providers.tts
-    monkeypatch.setattr(providers.tts, "EdgeTTS", FakeTTS)
-    monkeypatch.setattr(V, "voices", lambda: [{"id": "en-IN-PrabhatNeural"}])
+    monkeypatch.setattr(providers.tts, "ChatterboxTTS", FakeTTS)
+    monkeypatch.setattr(V, "voices", lambda engine=None: [{"id": "default", "label": "Built-in"}, {"id": "maya", "label": "Maya"}])
     for _ in range(2):
-        code, headers, body = call(f"{base}/api/voices/sample?voice=en-IN-PrabhatNeural&speed=10")
+        code, headers, body = call(f"{base}/api/voices/sample?voice=maya&speed=10")
         assert code == 200 and len(body) == 2004
-    assert calls == [("en-IN-PrabhatNeural", "+10%")]
+    assert calls == [("maya", "+10%")]
     assert call(f"{base}/api/voices/sample?voice=../../evil&speed=0")[0] == 400
+    assert call(f"{base}/api/voices/sample?voice=nobody&speed=0")[0] == 400
+
+
+def test_edge_voice_sample_when_edge_is_switched_back_on(server, monkeypatch):
+    base, _ = server
+    from webapp import voices as V
+    calls = []
+
+    class FakeTTS:
+        def __init__(self, voice, rate, timeout_s=30):
+            calls.append((voice, rate))
+
+        def synthesize(self, text, out):
+            out.write_bytes(b"RIFF" + b"\0" * 2000)
+
+    import providers.tts
+    monkeypatch.setenv("TTS_ENGINE", "edge")
+    monkeypatch.setattr(providers.tts, "EdgeTTS", FakeTTS)
+    monkeypatch.setattr(V, "voices", lambda engine=None: [{"id": "en-IN-PrabhatNeural"}])
+    code, _, body = call(f"{base}/api/voices/sample?voice=en-IN-PrabhatNeural&speed=10")
+    assert code == 200 and len(body) == 2004
+    assert calls == [("en-IN-PrabhatNeural", "+10%")]
     assert call(f"{base}/api/voices/sample?voice=en-US-NotRealNeural&speed=0")[0] == 400
 
 
@@ -137,3 +159,18 @@ def test_cross_site_posts_are_refused(server):
     base, _ = server
     code, _, _ = call(base + "/api/jobs", data=b"{}", method="POST", headers={"Origin": "https://evil.example"})
     assert code == 403
+
+
+def test_tunnel_posts_are_allowed_only_from_the_tunnel_page(server):
+    base, _ = server
+    tunnel = "abc-def.trycloudflare.com"
+    ok = [{"Origin": f"https://{tunnel}", "Host": tunnel},
+          {"Origin": f"https://{tunnel}", "X-Forwarded-Host": tunnel}]
+    refused = [{"Origin": f"https://{tunnel}"},  # Host stays 127.0.0.1 and nothing forwarded
+               {"Origin": "https://evil.trycloudflare.com", "Host": tunnel},
+               {"Origin": "https://evil.example", "Host": "evil.example"},
+               {"Origin": f"http://{tunnel}.evil.example", "Host": tunnel}]
+    for h in ok:
+        assert call(base + "/api/nope", data=b"{}", method="POST", headers=h)[0] == 404, h
+    for h in refused:
+        assert call(base + "/api/nope", data=b"{}", method="POST", headers=h)[0] == 403, h

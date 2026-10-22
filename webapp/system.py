@@ -18,8 +18,16 @@ def info() -> dict:
     except Exception:  # noqa: BLE001
         pass
     return {"provider": provider, "model": model.split("/")[-1].split(":")[0], "has_key": key,
-            "exec_mode": s.execution_mode, "default_voice": s.tts_voice, "ready": ready,
+            "exec_mode": s.execution_mode, "online_research": s.online_research,
+            "default_voice": s.tts_voice, "tts_engine": "edge" if s.tts_provider in ("edge", "sapi") else "chatterbox",
+            "default_voices": {"chatterbox": s.chatterbox_voice, "edge": s.edge_voice}, "ready": ready, "gpu": s.gpu, "gpu_found": gpu_found(),
             "asset_version": asset_version()}
+
+
+def gpu_found() -> bool:
+    """Whether this computer has a working NVIDIA encoder (checked once, then cached)."""
+    from rendering import gpu
+    return gpu.available()
 
 
 def asset_version() -> str:

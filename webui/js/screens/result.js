@@ -10,7 +10,8 @@ import { voiceName } from '../services/voices.js';
 import { saveAs } from '../services/download.js';
 import { toast } from '../ui/toast.js';
 import { selectTile, styleTiles } from '../components/styleTiles.js';
-import { voiceSelect } from '../components/voiceSelect.js';
+import { engineOf, engineSwitch, voiceSelect } from '../components/voiceSelect.js';
+import { defaultEngine } from '../services/voices.js';
 import { disclosure, wireDisclosures } from '../components/disclosure.js';
 import { titleEditor, wireTitleEditor } from '../components/titleEditor.js';
 import { versionStrip } from '../components/versionStrip.js';
@@ -31,7 +32,7 @@ function checksSummary(qa) {
 }
 
 function factsLine(d) {
-  return [fmtDur(d.duration_s), styleName(d.mode), voiceName(d.brief && d.brief.voice), d.size_mb ? d.size_mb + ' MB' : '',
+  return [fmtDur(d.duration_s), styleName(d.mode), voiceName(d.brief && d.brief.voice, d.brief && d.brief.tts_engine), d.size_mb ? d.size_mb + ' MB' : '',
     checksSummary(d.qa), d.is_test ? 'quick test' : ''].filter(Boolean).join(' · ');
 }
 
@@ -55,6 +56,9 @@ export function renderResult(d) {
   const wide = d.brief && d.brief.format === 'video_16x9';
   const errs = d.qa ? d.qa.failed.filter((c) => c.severity === 'error').map((c) => c.name + ': ' + c.detail) : [];
   const versions = versionsOf(d);
+  // the engine this video was made with (older videos only have an Edge voice name), so a new version keeps it
+  const b = d.brief || {};
+  const eng = b.tts_engine || (/Neural$/.test(b.voice || '') ? 'edge' : defaultEngine());
   app.innerHTML =
     '<div class="page">' +
       '<section class="section" style="gap:10px">' + titleEditor(d.title) + '<p class="facts">' + esc(factsLine(d)) + '</p></section>' +
@@ -73,7 +77,8 @@ export function renderResult(d) {
         '<div style="display:flex;flex-direction:column;gap:4px"><h2 id="h-again">Try another style</h2><p class="hint">Keeps the same script, so only the visuals and voice change.</p></div>' +
         styleTiles(d.mode, true) +
         '<div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;justify-content:space-between">' +
-          '<div class="field"><label for="v2">Voice</label>' + voiceSelect('v2', d.brief ? d.brief.voice : '') + '</div>' +
+          '<div class="field"><span class="label">Voices</span>' + engineSwitch('v2', eng) + '</div>' +
+          '<div class="field"><label for="v2">Voice</label>' + voiceSelect('v2', d.brief ? d.brief.voice : '', eng) + '</div>' +
           '<button type="button" class="btn primary" id="version">Make new version</button>' +
         '</div>' +
         '<ul class="errors" id="errors" hidden></ul>' +
@@ -113,7 +118,7 @@ function wire(d, versions) {
     const b = e.currentTarget;
     b.disabled = true;
     try {
-      const res = await post('/api/jobs/' + d.id + '/version', { mode: mode, voice: $('#v2').value });
+      const res = await post('/api/jobs/' + d.id + '/version', { mode: mode, voice: $('#v2').value, tts_engine: engineOf('v2') });
       refreshJobs();
       go('/job/' + res.id);
     } catch (err) { showErrors(err.errors); b.disabled = false; }

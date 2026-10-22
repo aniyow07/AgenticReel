@@ -25,7 +25,7 @@ import { OG_THEME } from "../styles/theme";
 const SceneBody: React.FC<{ scene: Scene; theme: Theme }> = ({ scene, theme }) => {
   switch (scene.visualType) {
     case "title":
-      return <AnimatedTitle title={scene.params.title} subtitle={scene.params.subtitle} theme={theme} />;
+      return <AnimatedTitle title={scene.params.title} subtitle={scene.params.subtitle} theme={theme} backdrop={scene.backdrop} />;
     case "text_reveal":
       return <TextReveal params={scene.params} theme={theme} />;
     case "key_points":

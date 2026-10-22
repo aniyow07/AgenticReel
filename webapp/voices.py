@@ -1,7 +1,11 @@
-"""The Edge TTS voices the app offers, labelled and grouped by accent."""
+"""The voices the app offers, per engine: Chatterbox-Turbo (Natural, local) and Edge TTS (Classic, online).
+The engine defaults to TTS_ENGINE; each video can pick either."""
 from __future__ import annotations
 
 import re
+import threading
+
+from providers import tts
 
 ACCENTS = {"US": "American", "GB": "British", "IN": "Indian", "AU": "Australian", "CA": "Canadian", "IE": "Irish",
            "NZ": "New Zealand", "ZA": "South African", "SG": "Singaporean", "PH": "Filipino", "KE": "Kenyan",
@@ -21,31 +25,44 @@ def voice_label(v: str) -> str:
 
 
 VOICE_ID = re.compile(r"^[a-z]{2,3}-[A-Z]{2}-[A-Za-z]{2,40}Neural$")
-_sample_lock = __import__("threading").Lock()
+_sample_lock = threading.Lock()
 
 
-def sample(voice: str, speed: int):
-    """A short spoken sample of a voice at a speed, made once with Edge TTS and cached under outputs/."""
+def _engine(engine: str | None) -> str:
+    return engine if engine in ("chatterbox", "edge") else tts.engine()
+
+
+def sample(voice: str, speed: int, engine: str | None = None):
+    """A short spoken sample of a voice at a speed, made once and cached under outputs/."""
     from pathlib import Path
 
     from webapp.config import settings
-    if not VOICE_ID.match(voice or ""):
+    engine = _engine(engine)
+    chatterbox = engine == "chatterbox"
+    voice = voice or (settings().chatterbox_voice if chatterbox else settings().edge_voice)
+    if not (tts.VOICE_ID if chatterbox else VOICE_ID).match(voice or ""):
         raise ValueError("Unknown voice.")
-    known = {v["id"] for v in voices()}
+    known = {v["id"]: v for v in voices(engine)}
     if known and voice not in known:
         raise ValueError("Unknown voice.")
     speed = max(-30, min(40, int(speed)))
-    out = settings().outputs_dir / "_voice_samples" / f"{voice}_{speed:+d}.mp3"
+    out = settings().outputs_dir / "_voice_samples" / f"{'cb_' if chatterbox else ''}{voice}_{speed:+d}.mp3"
     if out.exists() and out.stat().st_size > 1000:
         return out
-    name = voice_label(voice).split(" · ")[0].split(" (")[0]
-    text = f"Hi, I'm {name}. This is how your video will sound with my voice."
+    if chatterbox:
+        name = known[voice]["label"].split(" · ")[0] if voice != tts.DEFAULT_VOICE else ""
+        text = (f"Hi, I'm {name}. " if name else "Hi there! ") + "This is how your video will sound with my voice."
+    else:
+        name = voice_label(voice).split(" · ")[0].split(" (")[0]
+        text = f"Hi, I'm {name}. This is how your video will sound with my voice."
     with _sample_lock:  # one recording at a time; a second click on the same voice reuses the first
         if not out.exists():
-            from providers.tts import EdgeTTS
             out.parent.mkdir(parents=True, exist_ok=True)
             tmp = out.with_name(out.stem + "_tmp.wav")
-            EdgeTTS(voice=voice, rate=f"{speed:+d}%", timeout_s=30).synthesize(text, tmp)
+            if chatterbox:
+                tts.ChatterboxTTS(voice=voice, rate=f"{speed:+d}%", timeout_s=120).synthesize(text, tmp)
+            else:
+                tts.EdgeTTS(voice=voice, rate=f"{speed:+d}%", timeout_s=30).synthesize(text, tmp)
             # the TTS stage works in WAV; a small MP3 is plenty for a preview
             import subprocess
 
@@ -63,11 +80,15 @@ def sample(voice: str, speed: int):
     return out
 
 
-def voices() -> list[dict]:
+def voices(engine: str | None = None) -> list[dict]:
+    if _engine(engine) == "chatterbox":  # read each time: dropping a clip into assets/voices adds a voice
+        rows = [{"id": v["id"], "label": v["label"], "gender": v["gender"], "accent": v.get("accent", "")}
+                for v in tts.chatterbox_voices()]
+        # the built-in voice first, then plain voices, then each accent together so the picker can group them
+        return sorted(rows, key=lambda r: (r["id"] != tts.DEFAULT_VOICE, r["accent"], r["label"]))
     if "list" not in _cache:
         try:
-            from providers.tts import list_voices
-            vs = list_voices("en-") + [v for p in ACCENT_VOICES for v in list_voices(p)]
+            vs = tts.list_voices("en-", "edge") + [v for p in ACCENT_VOICES for v in tts.list_voices(p, "edge")]
             rows = [{"id": v["ShortName"], "label": voice_label(v["ShortName"]), "gender": v.get("Gender", ""),
                      "accent": ACCENTS.get(v["ShortName"].split("-")[1], v["ShortName"].split("-")[1])} for v in vs]
             rows.sort(key=lambda r: (r["accent"] != "American", r["accent"], r["label"]))

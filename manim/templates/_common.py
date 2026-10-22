@@ -58,11 +58,18 @@ setup_frame()
 
 def clean(s: object) -> str:
     text = str(s).replace("\n", " ").strip()
-    return text[:MAX_TEXT]
+    return text[:MAX_TEXT].replace(LINE_BREAK, "\n")  # only wrap()'s line breaks survive
+
+
+LINE_BREAK = " "
 
 
 def label(s: str, size: float = 34, color: str = TEXT, weight: str = "BOLD") -> Text:
-    return Text(clean(s), font=FONT, font_size=size, color=color, weight=weight)
+    text = clean(s)
+    if "\n" in text:  # lines from wrap(): centred under each other (a multi-line Text is left-aligned)
+        lines = [Text(t, font=FONT, font_size=size, color=color, weight=weight) for t in text.split("\n")]
+        return VGroup(*lines).arrange(DOWN, buff=size / 100 * 0.18)
+    return Text(text, font=FONT, font_size=size, color=color, weight=weight)
 
 
 def fit_width(mob, max_width: float):
@@ -257,3 +264,69 @@ __all__ = [
     "LOOKS", "look_of", "card", "heading", "compile_expr",
     "UP", "DOWN", "LEFT", "RIGHT", "VGroup",
 ]
+
+
+def overlay(scene, p: dict, C: dict, look: str, notes=()) -> list:
+    """Title at the top and up to three short notes at the bottom, pinned to the screen so they stay readable
+    while the 3D camera moves. Hidden at first: fade them in with m.animate.set_opacity(1)."""
+    fw = scene.camera.frame_width
+    items = [heading(p.get("title", ""), C, fw, look)]
+    texts = [clean(n)[:40] for n in notes if clean(n)][:3]
+    if texts:
+        g = VGroup(*[label(t, 24, C["accent"] if i == 0 else C["text"]) for i, t in enumerate(texts)])
+        fit_width(g.arrange(DOWN, buff=0.12), fw * 0.84).to_edge(DOWN, buff=0.45)
+        items.append(g)
+    for m in items:
+        scene.add_fixed_in_frame_mobjects(m)
+        m.set_opacity(0)
+    return items
+
+
+def legend(names: list[str], cols: list[str], C: dict, fw: float, head: str = ""):
+    """A fixed key of coloured dots and names for things that move around in 3D."""
+    g = VGroup()
+    if head:
+        g.add(label(head, 24, C["accent"]))
+    for i, n in enumerate(names):
+        g.add(VGroup(Dot(radius=0.09, color=cols[i % len(cols)]),
+                     Text(clean(n)[:24], font=FONT, font_size=22, color=C["text"])).arrange(RIGHT, buff=0.15))
+    g.arrange(DOWN, aligned_edge=LEFT, buff=0.12)
+    return fit_width(g, fw * 0.8).to_edge(DOWN, buff=0.4).to_edge(LEFT, buff=fw * 0.08)
+
+
+def show(*mobs):
+    """Animations that fade in overlay items hidden by overlay()/legend."""
+    return [m.animate.set_opacity(1) for m in mobs]
+
+
+SERIES = ("#5BD6B0", "#E86FA8", "#9B8CFF")
+
+
+def mix(a: str, b: str, t: float) -> str:
+    """A hex colour part way (t = 0..1) from a to b."""
+    ca = [int(a[i:i + 2], 16) for i in (1, 3, 5)]
+    cb = [int(b[i:i + 2], 16) for i in (1, 3, 5)]
+    return "#" + "".join(f"{round(x + (y - x) * t):02X}" for x, y in zip(ca, cb))
+
+
+def wrap(text: str, chars: int, max_lines: int = 3) -> str:
+    """Break text into lines of about `chars` characters on word boundaries (Text has no wrapping)."""
+    lines: list[str] = []
+    for w in clean(text).split():  # split() also drops line breaks already in the text  # split() also drops any line break already in the text
+        if lines and len(lines[-1]) + 1 + len(w) <= chars:
+            lines[-1] += " " + w
+        else:
+            lines.append(w)
+    if len(lines) > max_lines:
+        lines = lines[:max_lines - 1] + [" ".join(lines[max_lines - 1:])]
+    return LINE_BREAK.join(lines)
+
+
+def num_text(v: float, like: object = None) -> str:
+    """A number for display with thousands separators, keeping as many decimals as the source value had."""
+    src = str(like if like is not None else v)
+    dec = len(src.split(".")[1].rstrip("0")) if "." in src else 0
+    return f"{v:,.{min(dec, 2)}f}"
+
+
+GOOD, BAD = "#5BD6B0", "#FF6B7A"

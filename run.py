@@ -66,7 +66,9 @@ def main() -> int:
     ap.add_argument("--caption-size", type=float)
     ap.add_argument("--caption-position", choices=["upper", "center", "lower"])
     ap.add_argument("--output-dir", help="where job folders are written (default ./outputs)")
-    ap.add_argument("--voice", help="Edge TTS voice, e.g. en-US-GuyNeural (see --list-voices)")
+    ap.add_argument("--voice", help="voice id, e.g. default (see --list-voices)")
+    ap.add_argument("--tts-engine", choices=["chatterbox", "edge"],
+                    help="voice engine: chatterbox (natural, local, default TTS_ENGINE) or edge (classic, needs internet)")
     ap.add_argument("--voice-speed", type=int, metavar="PERCENT",
                     help="speaking speed: 0 = the voice's normal pace, 10 = 10%% faster (default TTS_RATE, +10), "
                          "-10 = slower; the script length follows it so videos stay 30-60 s")
@@ -76,16 +78,20 @@ def main() -> int:
                     help="minimum seconds between Gemini requests (default GEMINI_MIN_INTERVAL_S or 6)")
     ap.add_argument("--motion", choices=["auto", "subtle", "strong", "off"],
                     help="brainrot camera motion; auto lets the AI pick per line (default)")
-    ap.add_argument("--list-voices", action="store_true", help="print available Edge TTS voices and exit")
+    ap.add_argument("--list-voices", action="store_true", help="print the available voices and exit")
     ap.add_argument("--fresh-script", action="store_true",
                     help="write a new plan/script even if the same brief + sources were already used")
     ap.add_argument("--script-json", help="use this validated script.json instead of the Scriptwriter")
     ap.add_argument("--storyboard-json", help="use this storyboard instead of the Storyboarder")
     ap.add_argument("--status", action="store_true")
+    ap.add_argument("--gpu", choices=["auto", "on", "off"],
+                    help="use the NVIDIA GPU for video encoding and Remotion frames (default AGENTREEL_GPU or auto)")
     a = ap.parse_args()
 
     if a.provider:
         os.environ["LLM_PROVIDER"] = a.provider
+    if a.gpu:
+        os.environ["AGENTREEL_GPU"] = a.gpu
     if a.gemini_interval is not None:
         os.environ["GEMINI_MIN_INTERVAL_S"] = str(a.gemini_interval)
     if a.output_dir:
@@ -97,8 +103,8 @@ def main() -> int:
 
     if a.list_voices:
         from providers.tts import list_voices
-        for v in list_voices():
-            print(f"{v['ShortName']:38s} {v.get('Gender', ''):7s} {v.get('Locale', '')}")
+        for v in list_voices("", a.tts_engine or ""):
+            print(f"{v['ShortName']:38s} {v.get('Gender', ''):7s} {v.get('Label') or v.get('Locale', '')}")
         return 0
     if a.status:
         return status()
@@ -122,7 +128,7 @@ def main() -> int:
             report = p.run()
             job_dir = p.job.dir
         else:
-            overrides = {"motion": a.motion, "voice": a.voice, "speed": a.voice_speed, "mode": a.mode, "format": a.format, "duration_s": a.duration, "audience": a.audience,
+            overrides = {"motion": a.motion, "voice": a.voice, "tts_engine": a.tts_engine, "speed": a.voice_speed, "mode": a.mode, "format": a.format, "duration_s": a.duration, "audience": a.audience,
                          "content_type": a.content_type}
             if a.dev_short:
                 overrides["dev_short"] = True

@@ -11,7 +11,8 @@ from pydantic import BaseModel
 from core.config import Settings
 from core.jobs import Job
 from providers.openrouter import AuthError, BudgetExceeded, LLMError, OpenRouterClient, QuotaExhausted
-from schemas.brief import Brief
+from rendering.timeline import TAIL_S
+from schemas.brief import PROD_MAX_S, PROD_MIN_S, Brief
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -40,6 +41,8 @@ class AgentContext:
         return random.Random(self.seed)
 
     rate_override: str | None = None
+    # word count asked of a rewrite after the narration missed the length window (job.state "words_target")
+    words_target: int | None = None
 
     @property
     def base_rate(self) -> str:
@@ -57,8 +60,32 @@ class AgentContext:
         return rate_pct(self.base_rate)
 
     @property
+    def pace(self) -> float:
+        """Chatterbox-Turbo speaks about 158-175 words a minute at its normal speed (mean 165 over four 45-60 s
+        jobs, 2026-10-21), about 1.18x the Edge voices the word budget was calibrated on."""
+        return 1.18 if self.tts_provider == "chatterbox" else 1.0
+
+    @property
+    def tts_provider(self) -> str:
+        """The voice engine for this video: the brief's choice (Create screen, --tts-engine), else TTS_ENGINE."""
+        return getattr(self.brief, "tts_engine", "") or getattr(self.settings, "tts_provider", "")
+
+    @property
+    def word_budget(self) -> int:
+        """Words the script should have: the rewrite target after a length miss, else words_budget()."""
+        return self.words_target or words_budget(self.brief.duration_s, self.brief.mode, self.speed_pct, self.pace)
+
+    @property
     def voice(self) -> str:
-        return self.brief.voice or self.settings.tts_voice
+        """The brief's voice if it belongs to this video's engine (Edge names end in "Neural"), else that engine's
+        default voice."""
+        edge = self.tts_provider != "chatterbox"
+        v = self.brief.voice
+        if v and v.endswith("Neural") == edge:
+            return v
+        if self.tts_provider == getattr(self.settings, "tts_provider", ""):
+            return self.settings.tts_voice
+        return getattr(self.settings, "edge_voice" if edge else "chatterbox_voice", "") or self.settings.tts_voice
 
     def llm_enabled(self) -> bool:
         return self.mode != "LOCAL_ONLY" and self.llm is not None
@@ -105,9 +132,24 @@ def rate_pct(rate: str) -> int:
         return 0
 
 
-def words_budget(duration_s: float, mode: str, speed_pct: int = 0) -> int:
+def length_window(target_s: float) -> tuple[float, float]:
+    """The final lengths accepted for a requested length: within 3 s of it, but never outside the 30-60 s a
+    full video must have (so 30 -> 30-33, 45 -> 42-48, 60 -> 57-60). Test renders just get +/-3 s."""
+    lo, hi = max(PROD_MIN_S, target_s - 3), min(PROD_MAX_S, target_s + 3)
+    return (lo, hi) if lo < hi else (max(1.0, target_s - 3), target_s + 3)
+
+
+def length_aim(target_s: float) -> float:
+    """The length the narration is fitted to: the middle of the window."""
+    lo, hi = length_window(target_s)
+    return (lo + hi) / 2
+
+
+def words_budget(duration_s: float, mode: str, speed_pct: int = 0, pace: float = 1.0) -> int:
     # calibrated against Edge TTS neural voices at +0% rate (about 140-150 words per minute); a faster voice
-    # needs proportionally more words to fill the same time, so videos do not come out short
-    wpm = (150 if mode != "og" else 140) * (1 + speed_pct / 100)
-    # leave ~8% room for pauses between chunks and the closing hold
-    return max(12, int(duration_s * 0.92 * wpm / 60))
+    # needs proportionally more words to fill the same time, so videos do not come out short.
+    # `pace` is the engine's natural speed relative to that (AgentContext.pace).
+    wpm = (150 if mode != "og" else 140) * (1 + speed_pct / 100) * pace
+    # speech fills the aimed length minus the closing tail and the short pauses between chunks (~2%)
+    speech_s = length_aim(duration_s) * 0.98 - TAIL_S
+    return max(12, int(speech_s * wpm / 60))

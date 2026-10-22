@@ -18,9 +18,12 @@ def main() -> int:
     ap.add_argument("--gemini-interval", type=float, metavar="SECONDS")
     ap.add_argument("--port", type=int, default=8600)
     ap.add_argument("--no-browser", action="store_true")
+    ap.add_argument("--gpu", choices=["auto", "on", "off"], help="GPU rendering (default AGENTREEL_GPU or auto)")
     a = ap.parse_args()
     if a.provider:
         os.environ["LLM_PROVIDER"] = a.provider
+    if a.gpu:
+        os.environ["AGENTREEL_GPU"] = a.gpu
     if a.gemini_interval is not None:
         os.environ["GEMINI_MIN_INTERVAL_S"] = str(a.gemini_interval)
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), Handler)

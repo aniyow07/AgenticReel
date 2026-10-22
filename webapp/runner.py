@@ -7,7 +7,7 @@ import threading
 import time
 from pathlib import Path
 
-from webapp.config import AUDIO_EXT, EXEC_MODES, SOURCE_EXT, read_json, settings
+from webapp.config import AUDIO_EXT, EXEC_MODES, GPU_MODES, SOURCE_EXT, read_json, settings
 
 # job id -> thread, for jobs this server process is running right now
 running: dict[str, threading.Thread] = {}
@@ -105,20 +105,39 @@ def new_job(data: dict) -> str:
         "music": _upload_ok(data.get("music") or "", AUDIO_EXT),
         "dev_short": dev,
         "voice": data.get("voice") or "",
+        "tts_engine": data.get("tts_engine") if data.get("tts_engine") in ("chatterbox", "edge") else "",
         "speed": int(data["speed"]) if str(data.get("speed", "")).lstrip("+-").isdigit() else None,
         "motion": data.get("motion") or "auto",
     })
     exec_mode = data.get("exec_mode") if data.get("exec_mode") in EXEC_MODES else None
     seed = int(data.get("seed") or 42)
-    return _run(brief, exec_mode, seed, reuse=not data.get("fresh_script"))
+    wiki = data.get("online_research")
+    return _run(brief, exec_mode, seed, reuse=not data.get("fresh_script"),
+                online=wiki if isinstance(wiki, bool) else None, gpu=data.get("gpu"))
 
 
-def _run(brief, exec_mode, seed: int, reuse: bool) -> str:
+def _saved_online(state: dict) -> bool | None:
+    """The Wikipedia setting a job was made with, so its versions and resumes research the same way."""
+    v = (state.get("config") or {}).get("online_research")
+    return v if isinstance(v, bool) else None
+
+
+def _saved_gpu(state: dict) -> str | None:
+    """The GPU setting a job was made with (auto, on or off), reused by its versions and resumes."""
+    v = (state.get("config") or {}).get("gpu")
+    return v if v in GPU_MODES else None
+
+
+def _run(brief, exec_mode, seed: int, reuse: bool, online: bool | None = None, gpu: str | None = None) -> str:
     def fn(holder):
         from orchestrator import Pipeline
         s = settings()
         if exec_mode:
             s.execution_mode = exec_mode
+        if online is not None:
+            s.online_research = online
+        if gpu in GPU_MODES:
+            s.gpu = gpu
         p = Pipeline(brief, settings=s, seed=seed, reuse_content=reuse)
         holder["job_id"] = p.job.id
         p.run()
@@ -134,10 +153,12 @@ def new_version(d: Path, data: dict) -> str:
         update["mode"] = data["mode"]
     if "voice" in data:
         update["voice"] = data.get("voice") or ""
+    if data.get("tts_engine") in ("chatterbox", "edge"):
+        update["tts_engine"] = data["tts_engine"]
     # keep the original's AI setting so a local-only video does not start calling the API for its versions
     mode = (state.get("config") or {}).get("execution_mode")
     return _run(base.model_copy(update=update), mode if mode in EXEC_MODES else None, int(state.get("seed", 42)),
-                reuse=True)
+                reuse=True, online=_saved_online(state), gpu=_saved_gpu(state))
 
 
 def resume(d: Path) -> str:
@@ -148,7 +169,12 @@ def resume(d: Path) -> str:
 
     def fn(holder):
         from orchestrator import Pipeline
-        p = Pipeline(job_id=d.name, settings=settings(), seed=int(state.get("seed", 42)))
+        s = settings()
+        if _saved_online(state) is not None:
+            s.online_research = _saved_online(state)
+        if _saved_gpu(state):
+            s.gpu = _saved_gpu(state)
+        p = Pipeline(job_id=d.name, settings=s, seed=int(state.get("seed", 42)))
         holder["job_id"] = p.job.id
         p.run()
     return start(fn)

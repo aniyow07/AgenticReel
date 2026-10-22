@@ -10,17 +10,19 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from agents.base import AgentContext, AgentFailure
 from core import gameplay
 from providers import tts as tts_mod
-from rendering import manim_runner
+from rendering import gpu, manim_runner
 from rendering.media_utils import MediaError, link_or_copy, probe, require_tool, run, sha256
 from schemas.artifacts import AssetEntry, AssetManifest, Script, SegmentAudio, Storyboard
 
 XFADE_S = 0.25
 MIDDLE_MARGIN = 0.15  # skip the first/last 15% of each clip
+MANIM_WORKERS = 4  # Manim clips rendered at once
 MIN_CUT_S, MAX_CUT_S = 4.0, 7.0  # background cuts to a new stretch this often
 
 
@@ -34,8 +36,11 @@ def synthesize_segments(ctx: AgentContext, script: Script) -> list[SegmentAudio]
     out_dir = job.assets_dir / "audio"
     if ctx.brief.narration_audio:
         return _supplied_segments(ctx, script)
-    chain = tts_mod.provider_chain(s.tts_provider, ctx.voice, ctx.tts_rate, ctx.mode == "LOCAL_ONLY")
+    chain = tts_mod.provider_chain(ctx.tts_provider, ctx.voice, ctx.tts_rate, ctx.mode == "LOCAL_ONLY")
     if not chain:
+        if ctx.tts_provider == "chatterbox":
+            raise AgentFailure("tts", "No TTS backend is available: the Chatterbox voice needs .venv-tts and the model files in "
+                                      f"{tts_mod.chatterbox_model_dir()}. Supply narration audio instead.")
         raise AgentFailure("tts", "No TTS backend is available (edge-tts and Windows SAPI both unavailable). "
                                   "Supply narration audio instead.")
     results: list[SegmentAudio] = []
@@ -63,7 +68,8 @@ def synthesize_segments(ctx: AgentContext, script: Script) -> list[SegmentAudio]
                                 encoding="utf-8")
                 job.log.log("tts", r.provider, "ok", segment=seg.segment_id, voice=r.voice,
                             duration_s=round(r.duration_s, 3), latency_s=round(r.elapsed_s, 3),
-                            word_timings=len(r.word_timings), output=str(wav.name), sha256=sha256(wav))
+                            word_timings=len(r.word_timings), output=str(wav.name), sha256=sha256(wav),
+                            **getattr(r, "stats", {}))
                 results.append(sa)
                 break
             except tts_mod.TTSError as e:
@@ -94,6 +100,24 @@ def _supplied_segments(ctx: AgentContext, script: Script) -> list[SegmentAudio]:
     job.log.log("tts", "supplied", "ok", duration_s=r.duration_s, note="segment times approximated by characters")
     ctx.notes.append("Supplied narration: caption timing is approximate (shared by text length within the measured "
                      "audio), not word-aligned.")
+    return out
+
+
+def add_pauses(ctx: AgentContext, segs: list[SegmentAudio], pause_s: float) -> list[SegmentAudio]:
+    """Lengthen the pause after every chunk but the last by `pause_s` (silence appended to a copy of the chunk),
+    so narration a little short of the requested length fills it without slowing the voice further."""
+    job, out = ctx.job, []
+    for i, s in enumerate(segs):
+        if i == len(segs) - 1 or pause_s <= 0:
+            out.append(s)
+            continue
+        src = job.dir / s.path
+        dst = src.with_name(src.stem + "_p.wav")
+        cp = run([require_tool("ffmpeg"), "-v", "error", "-y", "-i", str(src), "-af", f"apad=pad_dur={pause_s:.3f}",
+                  "-c:a", "pcm_s16le", "-ar", "48000", "-ac", "2", str(dst)])
+        if cp.returncode != 0 or not dst.exists():
+            raise AgentFailure("tts", f"could not add a pause after {s.segment_id}: {cp.stderr[:300]}")
+        out.append(s.model_copy(update={"path": str(dst.relative_to(job.dir)), "duration_s": probe(dst).duration}))
     return out
 
 
@@ -196,9 +220,12 @@ def prepare_gameplay(ctx: AgentContext, total_s: float, width: int, height: int,
         offset += pieces[k - 1][2] - XFADE_S
         fl.append(f"[{last}][v{k}]xfade=transition=fade:duration={XFADE_S}:offset={offset:.3f}[x{k}]")
         last = f"x{k}"
-    cmd += ["-filter_complex", ";".join(fl), "-map", f"[{last}]", "-t", f"{total_s:.3f}", "-an",
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", str(out)]
-    cp = run(cmd, timeout=1200)
+    cmd += ["-filter_complex", ";".join(fl), "-map", f"[{last}]", "-t", f"{total_s:.3f}", "-an"]
+    cp = run([*cmd, *gpu.h264_args(20, "veryfast"), "-pix_fmt", "yuv420p", str(out)], timeout=1200)
+    if cp.returncode != 0 and gpu.enabled():  # NVENC failed: the CPU encoder always works
+        ctx.job.log.log("assets", "ffmpeg", "retry", reason="NVENC encode failed; retrying with libx264",
+                        log_tail=cp.stderr[-600:])
+        cp = run([*cmd, *gpu.h264_args(20, "veryfast", gpu=False), "-pix_fmt", "yuv420p", str(out)], timeout=1200)
     if cp.returncode != 0 or not out.exists():
         raise AgentFailure("assets", f"ffmpeg could not prepare gameplay background: {cp.stderr[-600:]}")
     info = probe(out)
@@ -236,6 +263,7 @@ def render_manim(ctx: AgentContext, storyboard: Storyboard, scene_durations: dic
     looks = list(manim_runner.LOOKS)
     first = ctx.rng.randrange(len(looks))
     n_manim = 0
+    todo: list[tuple[str, dict, str]] = []
     for sc in storyboard.scenes:
         if sc.visual_type != "manim" or not sc.manim_template:
             continue
@@ -251,16 +279,25 @@ def render_manim(ctx: AgentContext, storyboard: Storyboard, scene_durations: dic
             clips[sc.scene_id] = str(existing.relative_to(ctx.job.dir))
             ctx.job.log.log("manim", "manim", "cached", scene=sc.scene_id)
             continue
-        res = manim_runner.render(params, ctx.job.assets_dir / "manim", name, quality=quality, size=size,
-                                  transparent=True)
-        ctx.job.log.log("manim", "manim", "ok" if res.ok else "error", scene=sc.scene_id,
+        todo.append((sc.scene_id, params, name))
+
+    def one(item):
+        _, params, name = item
+        return manim_runner.render(params, ctx.job.assets_dir / "manim", name, quality=quality, size=size,
+                                   transparent=True)
+
+    # Each clip is its own single-threaded Manim process, so clips render side by side (2 clips: ~24 s -> ~13 s).
+    with ThreadPoolExecutor(max(1, min(len(todo), MANIM_WORKERS))) as pool:
+        results = list(pool.map(one, todo))
+    for (scene_id, params, _), res in zip(todo, results):
+        ctx.job.log.log("manim", "manim", "ok" if res.ok else "error", scene=scene_id,
                         template=params.get("template"), latency_s=round(res.elapsed_s, 2), error=res.error,
                         output=res.clip_path, sha256=res.sha256, returncode=res.returncode,
                         log_tail=res.log_tail[-600:] if not res.ok else "")
         if res.ok and res.clip_path:
-            clips[sc.scene_id] = str(Path(res.clip_path).relative_to(ctx.job.dir))
+            clips[scene_id] = str(Path(res.clip_path).relative_to(ctx.job.dir))
         else:
-            ctx.notes.append(f"Manim failed for {sc.scene_id} ({res.error}); a Remotion diagram is used instead")
+            ctx.notes.append(f"Manim failed for {scene_id} ({res.error}); a Remotion diagram is used instead")
     return clips
 
 

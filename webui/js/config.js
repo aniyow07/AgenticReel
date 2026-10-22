@@ -21,6 +21,10 @@ export const SPEEDS = [[-10, 'Slower'], [0, 'Normal'], [10, 'Fast'], [20, 'Faste
 
 export const FORMATS = [['video_9x16', 'Vertical 9:16'], ['video_16x9', 'Wide 16:9']];
 
+export const GPU_MODES = [
+  ['', 'Default from settings'], ['auto', 'Auto, if an NVIDIA GPU works'], ['on', 'Always'], ['off', 'Off, CPU only'],
+];
+
 export const WRITING_MODES = [
   ['', 'Default from settings'], ['AI_PREFERRED', 'AI, fall back to local'],
   ['AI_REQUIRED', 'AI only'], ['LOCAL_ONLY', 'Local only, no API calls'],

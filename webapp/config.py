@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -16,6 +17,9 @@ SOURCE_EXT = {".pdf", ".docx", ".txt", ".md"}
 AUDIO_EXT = {".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"}
 MAX_UPLOAD = 50_000_000
 EXEC_MODES = {"AI_PREFERRED", "LOCAL_ONLY", "AI_REQUIRED"}
+GPU_MODES = {"auto", "on", "off"}
+# extra public hostnames (comma-separated) whose https pages may post to the app, e.g. a named tunnel
+ALLOWED_HOSTS = {h.strip().lower() for h in os.environ.get("AGENTREEL_ALLOWED_HOSTS", "").split(",") if h.strip()}
 ID_RE = re.compile(r"^[A-Za-z0-9_\-]{1,80}$")
 
 

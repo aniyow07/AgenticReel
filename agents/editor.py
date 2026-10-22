@@ -12,9 +12,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from agents.base import AgentContext, AgentFailure
-from rendering import remotion_runner
+from rendering import gpu, manim_runner, remotion_runner
 from rendering.media_utils import link_or_copy, measure_loudness, probe, require_tool, run, sha256
-from rendering.timeline import (SEGMENT_GAP_S, NarrationLayout, TimedCaption, build_captions, captions_to_frames,
+from rendering.timeline import (FADE_OUT_S, SEGMENT_GAP_S, NarrationLayout, TimedCaption, build_captions, captions_to_frames,
                                 layout_segments, s2f, scene_frames, to_srt)
 from schemas.artifacts import AssetManifest, Script, SegmentAudio, Storyboard
 from core.themes import pick_palette
@@ -69,6 +69,12 @@ def assign_backdrops(scenes: list[dict], seed: int, topic: str) -> None:
     rng = random.Random(f"{seed}:{topic}")
     order = list(BACKDROP_STYLES)
     rng.shuffle(order)
+    if len(scenes) > 1 and scenes[0].get("visualType") == "title":
+        # the intro follows the video's own look: its most used backdrop (not the next scene's, so the cut shows)
+        rest = [sc.get("backdrop") for sc in scenes[1:] if sc.get("backdrop") in BACKDROP_STYLES]
+        avoid = rest[0] if rest else None
+        ranked = sorted(dict.fromkeys(rest), key=lambda s: -rest.count(s))
+        scenes[0]["backdrop"] = next((s for s in ranked if s != avoid), next(s for s in order if s != avoid))
     prev = None
     for i, sc in enumerate(scenes):
         style = sc.get("backdrop") if sc.get("backdrop") in BACKDROP_STYLES else order[i % len(order)]
@@ -144,11 +150,9 @@ def build_timeline(ctx: AgentContext, script: Script, storyboard: Storyboard, ma
                     params = {"src": stage(clip, f"manim/{clip.name}"), "heading": heading,
                               "clipDurationInFrames": max(1, int(probe(clip).duration * prof.fps) - 1)}
                 else:  # Manim unavailable: compatible Remotion diagram from the same template data
-                    t = sc.manim_template or {}
-                    if t.get("steps"):
-                        vt, params = "process", {"heading": t.get("title", ""), "steps": t["steps"][:6]}
-                    elif t.get("events"):
-                        vt, params = "timeline", {"heading": t.get("title", ""), "events": t["events"][:6]}
+                    alt = manim_runner.remotion_fallback(sc.manim_template or {})
+                    if alt:
+                        vt, params = alt
                     else:
                         vt, params = "text_reveal", {"text": texts[sc.narration_segment_ids[0]]}
             scenes.append({"id": sc.scene_id, "startFrame": start, "durationInFrames": dur, "visualType": vt,
@@ -192,11 +196,12 @@ def render(ctx: AgentContext, props: RenderProps) -> remotion_runner.RenderResul
     res = remotion_runner.render(props, job.public_dir, job.path("render_props.json"),
                                  job.path("render/remotion_raw.mp4"))
     if not res.ok and res.returncode not in (None, 0) and "staged media missing" not in (res.error or ""):
-        # Remotion's video compositor occasionally crashes under load; retry once with less parallelism.
-        job.log.log("remotion_render", "remotion", "retry", reason="render failed; retrying with concurrency 2",
+        # Remotion's video compositor occasionally crashes under load; retry once with less parallelism,
+        # and on the CPU in case the GPU backend was the problem.
+        job.log.log("remotion_render", "remotion", "retry", reason="render failed; retrying with concurrency 2 on the CPU",
                     log_tail=res.log_tail[-600:])
         res = remotion_runner.render(props, job.public_dir, job.path("render_props.json"),
-                                     job.path("render/remotion_raw.mp4"), concurrency=2)
+                                     job.path("render/remotion_raw.mp4"), concurrency=2, gpu=False)
     job.log.log("remotion_render", "remotion", "ok" if res.ok else "error", renderer="remotion",
                 composition=res.composition, latency_s=round(res.elapsed_s, 2), returncode=res.returncode,
                 error=res.error, output=res.output, sha256=res.sha256, probe=res.probe,
@@ -207,31 +212,48 @@ def render(ctx: AgentContext, props: RenderProps) -> remotion_runner.RenderResul
 
 
 def finish(ctx: AgentContext, raw: Path, props: RenderProps) -> dict:
-    """Loudness-normalise (two-pass loudnorm), encode to spec and enforce the size cap."""
+    """Loudness-normalise (two-pass loudnorm), fade picture and sound out together over the closing tail, encode
+    to spec (cut at exactly the timeline length, so audio and video end on the same frame) and enforce the
+    size cap."""
     job = ctx.job
     out = job.path("final.mp4")
     has_audio = probe(raw).has_audio
-    af = []
+    dur = props.durationInFrames / props.fps
+    fade_st = max(0.0, dur - FADE_OUT_S)
+    afade = f"afade=t=out:st={fade_st:.3f}:d={FADE_OUT_S}"
+    af = ["-af", afade] if has_audio else []
     loud = measure_loudness(raw) if has_audio else None
     if loud and loud.get("input_i") not in (None, "-inf"):
         af = ["-af", (f"loudnorm=I={TARGET_LUFS}:TP=-1.5:LRA=11:measured_I={loud['input_i']}:"
                       f"measured_TP={loud['input_tp']}:measured_LRA={loud['input_lra']}:"
                       f"measured_thresh={loud['input_thresh']}:offset={loud['target_offset']}:linear=true,"
-                      f"aresample=48000")]
+                      f"aresample=48000,{afade}")]
+    vf = ["-vf", f"fade=t=out:st={fade_st:.3f}:d={FADE_OUT_S}"]
     max_mb = ctx.settings.max_output_mb
 
-    def encode(vflags: list[str]) -> None:
-        cmd = [require_tool("ffmpeg"), "-v", "error", "-y", "-i", str(raw), *af, "-c:v", "libx264", *vflags,
-               "-preset", "medium", "-pix_fmt", "yuv420p", "-color_range", "tv", "-r", str(props.fps),
-               "-fps_mode", "cfr", "-movflags", "+faststart"]
-        if has_audio:
-            cmd += ["-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2"]
-        cmd.append(str(out))
-        cp = run(cmd, timeout=1800)
-        if cp.returncode != 0 or not out.exists():
-            raise AgentFailure("ffmpeg", f"final encode failed: {cp.stderr[-800:]}")
+    use_gpu = gpu.enabled()
 
-    encode(["-crf", "20"])
+    def encode(vflags) -> None:
+        """vflags(gpu) gives the video encoder flags; a failed NVENC encode is retried with libx264."""
+        nonlocal use_gpu
+        for attempt_gpu in ([True, False] if use_gpu else [False]):
+            cmd = [require_tool("ffmpeg"), "-v", "error", "-y", "-i", str(raw), *vf, *af, *vflags(attempt_gpu),
+                   "-pix_fmt", "yuv420p", "-color_range", "tv", "-r", str(props.fps),
+                   "-fps_mode", "cfr", "-t", f"{dur:.3f}", "-movflags", "+faststart"]
+            if has_audio:
+                cmd += ["-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2"]
+            cmd.append(str(out))
+            cp = run(cmd, timeout=1800)
+            if cp.returncode == 0 and out.exists():
+                job.log.log("ffmpeg", "ffmpeg", "encoded", encoder="h264_nvenc" if attempt_gpu else "libx264")
+                return
+            if attempt_gpu:
+                use_gpu = False
+                job.log.log("ffmpeg", "ffmpeg", "retry", reason="NVENC encode failed; retrying with libx264",
+                            log_tail=cp.stderr[-600:])
+        raise AgentFailure("ffmpeg", f"final encode failed: {cp.stderr[-800:]}")
+
+    encode(lambda g: gpu.h264_args(20, "medium", gpu=g))
     size_mb = out.stat().st_size / 1e6
     attempts = 0
     while size_mb > max_mb and attempts < 2:
@@ -239,7 +261,7 @@ def finish(ctx: AgentContext, raw: Path, props: RenderProps) -> dict:
         dur = probe(out).duration
         vbr = max(300, int((max_mb * 8000 * 0.92) / dur - 170))  # kbps, leaving room for audio + overhead
         job.log.log("ffmpeg", "ffmpeg", "reencode", reason=f"{size_mb:.1f} MB > {max_mb} MB", video_kbps=vbr)
-        encode(["-b:v", f"{vbr}k", "-maxrate", f"{int(vbr * 1.2)}k", "-bufsize", f"{vbr * 2}k"])
+        encode(lambda g, vbr=vbr: gpu.bitrate_args(vbr, gpu=g))
         size_mb = out.stat().st_size / 1e6
     after = measure_loudness(out) if has_audio else None
     info = probe(out)

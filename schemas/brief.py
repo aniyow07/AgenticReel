@@ -38,8 +38,10 @@ class Brief(BaseModel):
     source_files: list[str] = Field(default_factory=list, max_length=20)
     source_text: str = Field(default="", max_length=200_000)
     narration_audio: str = Field(default="", max_length=500)
-    # Edge TTS voice short name, e.g. "en-US-GuyNeural"; empty = TTS_VOICE from .env
+    # voice id from --list-voices, e.g. "default"; empty = the default voice from .env
     voice: str = Field(default="", max_length=60)
+    # voice engine for this video: chatterbox (Natural, local) or edge (Classic, online); empty = TTS_ENGINE
+    tts_engine: Literal["", "chatterbox", "edge"] = ""
     # speaking speed in percent relative to the voice's normal pace (+10 = 10% faster); None = TTS_RATE setting
     speed: int | None = Field(default=None, ge=-30, le=40)
     # brainrot camera motion: "auto" lets the storyboard model pick the energy of each line
@@ -59,8 +61,10 @@ class Brief(BaseModel):
     @classmethod
     def _voice(cls, v: str) -> str:
         v = v.strip()
-        if v and not re.fullmatch(r"[A-Za-z]{2,3}-[A-Za-z]{2,4}(-[A-Za-z]+)?-[A-Za-z0-9]+Neural", v):
-            raise ValueError("voice must be an Edge TTS voice name such as en-US-GuyNeural")
+        # a Chatterbox voice id (e.g. "default", "maya"), or an Edge voice name kept from older videos / TTS_ENGINE=edge
+        if v and not (re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,39}", v)
+                      or re.fullmatch(r"[A-Za-z]{2,3}-[A-Za-z]{2,4}(-[A-Za-z]+)?-[A-Za-z0-9]+Neural", v)):
+            raise ValueError("voice must be a voice id such as 'default' (see --list-voices)")
         return v
 
     @field_validator("topic", "audience", "tone", "cta")

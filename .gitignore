@@ -55,3 +55,12 @@ _cleanup_trash/
 .idea/
 .DS_Store
 Thumbs.db
+
+# --- local voice model (Chatterbox-Turbo) and its PyTorch environment ---
+.venv-tts/
+models/
+
+# --- tunnel binaries (download your own copy) ---
+cloudflare.exe
+cloudflared.exe
+cloudflared

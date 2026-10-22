@@ -63,6 +63,28 @@ def ingest(ctx: AgentContext) -> tuple[list, list[Source], list[str]]:
     return chunks, sources, problems
 
 
+USER_PASSAGES = 7  # of the 10 passages shown to the LLM, at most this many from the user's sources when Wikipedia is on
+
+
+def _tiers(chunks: list, online_ids: set[str]) -> list[ChunkIndex]:
+    """One index for the user's own sources, one for online sources; only non-empty ones."""
+    own = [c for c in chunks if c.source_id not in online_ids]
+    online = [c for c in chunks if c.source_id in online_ids]
+    return [ChunkIndex(x) for x in (own, online) if x]
+
+
+def _verify(tiers: list[ChunkIndex], claim: str) -> tuple:
+    """Best evidence for a claim, preferring the user's sources over Wikipedia."""
+    best = (None, "", 0.0)
+    for tier in tiers:
+        found = verify_claim(tier, claim)
+        if found[2] > best[2]:
+            best = found
+        if best[2] >= 0.6:
+            break
+    return best
+
+
 def _looks_like_statement(s: str) -> bool:
     return len(s.split()) >= 4
 
@@ -94,13 +116,19 @@ def run(ctx: AgentContext, plan: Plan) -> Facts:
         return Facts(facts=facts, sources=sources, research_performed=False, limitations=limitations,
                      origin="local")
 
+    # The user's own sources and Wikipedia are searched separately: in one index the many topic-heavy
+    # Wikipedia sections dilute the term weights and push a short PDF below the relevance floor.
+    tiers = _tiers(chunks, {s.source_id for s in sources if s.kind == "wikipedia"})
     queries = build_queries(b.topic, b.must_include, plan.research_questions)
-    hits: dict[str, tuple] = {}
-    for q in queries:
-        for ch, score in index.search(q, k=4):
-            if ch.chunk_id not in hits or hits[ch.chunk_id][1] < score:
-                hits[ch.chunk_id] = (ch, score, q)
-    ranked = sorted(hits.values(), key=lambda x: x[1], reverse=True)[:10]
+    ranked = []
+    for tier in tiers:  # user sources first, Wikipedia fills the remaining slots
+        hits: dict[str, tuple] = {}
+        for q in queries:
+            for ch, score in tier.search(q, k=4):
+                if ch.chunk_id not in hits or hits[ch.chunk_id][1] < score:
+                    hits[ch.chunk_id] = (ch, score, q)
+        take = USER_PASSAGES if tier is not tiers[-1] else 10 - len(ranked)
+        ranked += sorted(hits.values(), key=lambda x: x[1], reverse=True)[:take]
     if not ranked:
         limitations.append("The supplied sources did not contain passages relevant to the topic.")
 
@@ -132,7 +160,7 @@ def run(ctx: AgentContext, plan: Plan) -> Facts:
         if key in seen:
             continue
         seen.add(key)
-        ch, evidence, score = verify_claim(index, claim)
+        ch, evidence, score = _verify(tiers, claim)
         fid = f"F{len(facts) + 1:03d}"
         if ch and score >= 0.6:
             facts.append(Fact(fact_id=fid, claim=claim, source_id=ch.source_id, source=ch.source, page=ch.page,

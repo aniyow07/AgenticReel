@@ -76,7 +76,7 @@ def test_sort_steps_really_sort():
     spec = importlib.util.spec_from_file_location("array_algorithm", Path(manim_runner.TEMPLATE_DIR) / "array_algorithm.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    for algo in ("bubble_sort", "selection_sort", "insertion_sort"):
+    for algo in ("bubble_sort", "selection_sort", "insertion_sort", "quick_sort"):
         a = [5, 2, 8, 1, 4]
         for ev in mod.sort_steps(algo, a):
             if ev[0] == "swap":
@@ -94,3 +94,47 @@ def test_sort_steps_really_sort():
 ])
 def test_worked_math_is_recognised(text, math):
     assert bool(MATH_WORK.search(text)) is math
+
+
+def test_3d_templates_validate():
+    m = manim_runner.validate({"template": "orbit_3d", "kind": "atom", "orbiters": [" e1 ", "", "e2"]})
+    assert m.orbiters == ["e1", "e2"]
+    manim_runner.validate({"template": "surface_3d", "surface": "saddle"})
+    manim_runner.validate({"template": "bar_chart_3d", "labels": ["a", "b", "c"], "values": [1, 2, 3]})
+    with pytest.raises(Exception):
+        manim_runner.validate({"template": "surface_3d", "surface": "__import__('os')"})
+    with pytest.raises(Exception):
+        manim_runner.validate({"template": "bar_chart_3d", "labels": ["a", "b"], "values": [1]})
+
+
+def test_title_backdrop_follows_the_video():
+    from agents.editor import assign_backdrops
+    scenes = [{"visualType": "title", "backdrop": "rays"}, {"visualType": "text_reveal", "backdrop": "matrix"},
+              {"visualType": "manim", "backdrop": "circuit"}, {"visualType": "chart", "backdrop": "matrix"},
+              {"visualType": "manim", "backdrop": "circuit"}]
+    assign_backdrops(scenes, 1, "t")
+    assert scenes[0]["backdrop"] == "circuit"  # most used, and not the same as the next scene
+
+
+def test_new_3d_templates_take_only_named_choices():
+    ok = [{"template": "dna_helix_3d", "caption": "Base pairs"},
+          {"template": "molecule_3d", "molecule": "benzene"},
+          {"template": "globe_3d", "hubs": ["London", "Tokyo"]},
+          {"template": "vector_field_3d", "field": "dipole"},
+          {"template": "crystal_lattice_3d", "lattice": "salt"},
+          {"template": "neural_net_3d", "layers": ["Input", "Hidden", "Output"]},
+          {"template": "layer_stack_3d", "layers": ["App", "OS", "Hardware"]},
+          {"template": "planet_layers_3d", "layers": ["Core", "Mantle", "Crust"]},
+          {"template": "wave_3d", "kind": "electromagnetic"},
+          {"template": "solids_3d", "shapes": ["cube", "torus"]},
+          {"template": "galaxy_3d", "arms": 3}]
+    for params in ok:
+        manim_runner.validate(params)
+    assert len(manim_runner.THREE_D) >= 14
+    for bad in [{"template": "molecule_3d", "molecule": "__import__('os')"},
+                {"template": "solids_3d", "shapes": ["cube", "x**2"]},
+                {"template": "galaxy_3d", "arms": 40},
+                {"template": "globe_3d", "hubs": ["only one"]},
+                {"template": "wave_3d", "kind": "sin(x)"}]:
+        with pytest.raises(Exception):
+            manim_runner.validate(bad)

@@ -15,20 +15,25 @@ from typing import Callable
 import yaml
 
 from agents import asset_generator, critic, editor, planner, researcher, scriptwriter, storyboarder
-from agents.base import AgentContext, AgentFailure
+from agents.base import AgentContext, AgentFailure, length_window, rate_pct
 from core import gameplay
 from core.config import Settings
 from core.content_cache import ContentCache, content_key
 from core.jobs import STAGES, Job, fingerprint, new_job_id, safe_filename
 from core.themes import manim_palette
 from providers.openrouter import OpenRouterClient
-from rendering import manim_runner
+from rendering import gpu, manim_runner
 from rendering.media_utils import probe
+from rendering.timeline import TAIL_S
 from schemas.artifacts import AssetManifest, Facts, Plan, QAReport, Script, Storyboard
 from schemas.brief import Brief
 from schemas.render_props import RenderProps
 
 ROUTE_ORDER = {s: i for i, s in enumerate(STAGES)}
+MAX_RATE_SHIFT = 15  # points the narration speed may move from the chosen speed to fit the length
+MAX_EXTRA_PAUSE_S = 0.35  # extra pause allowed after each narration chunk to fill a short script
+LENGTH_MARGIN_S = 0.5  # aim this far inside the length window so frame rounding cannot tip it out
+LENGTH_REWRITES = 1  # script rewrites (LLM calls) allowed when pacing cannot reach the length window
 
 
 class PipelineError(RuntimeError):
@@ -110,7 +115,9 @@ class Pipeline:
         self.job.set(reuse_content=self.reuse_content)
         # different providers (and local templates) keep separate caches so their scripts can be compared
         engine = "local" if self.settings.execution_mode == "LOCAL_ONLY" else self.settings.llm_provider
-        self.cache = ContentCache(root, f"{content_key(self.brief)}-{engine}")
+        # research with and without Wikipedia gives different facts, so they never share a cache entry
+        wiki = "-wiki" if self.settings.online_research else ""
+        self.cache = ContentCache(root, f"{content_key(self.brief)}-{engine}{wiki}")
         self.job.set(seed=seed, mode=self.brief.mode, topic=self.brief.topic, config=self.settings.public_dict(),
                      llm_provider=self.settings.llm_provider,
                      is_test_render=self.brief.dev_short)
@@ -174,12 +181,13 @@ class Pipeline:
 
     def research(self, plan: Plan) -> Facts:
         files = [(f, Path(f).stat().st_size if Path(f).exists() else 0) for f in self.brief.source_files]
-        fp = fingerprint(plan, files, self.brief.source_text, researcher.PROMPT_VERSION)
+        fp = fingerprint(plan, files, self.brief.source_text, researcher.PROMPT_VERSION,
+                         *(["wikipedia"] if self.settings.online_research else []))
 
         def fn():
             cached = self._from_cache("facts", "research")
             f = Facts.model_validate(cached) if cached else researcher.run(self.ctx, plan)
-            if cached and self.brief.source_files:  # the retrieval index is used for on-screen text grounding
+            if cached and (self.brief.source_files or self.settings.online_research):  # used for on-screen grounding
                 researcher.ingest_index(self.ctx)
             self.cache.put("facts", f.model_dump(mode="json"), self.job.id)
             self.job.write_json("facts.json", f)
@@ -201,7 +209,13 @@ class Pipeline:
                     self.job.log.log("scripting", "validator", "issues", issues=issues, note="user-supplied script")
             else:
                 cached = None if feedback else self._from_cache("script", "scripting")
-                s = Script.model_validate(cached) if cached else scriptwriter.run(self.ctx, plan, facts, feedback)
+                s = Script.model_validate(cached) if cached else None
+                if s and scriptwriter.is_short(scriptwriter.check_script(s, facts, self.ctx)):
+                    # an earlier job's script that is too short for this length/speed is written again
+                    self.job.log.log("scripting", "content_cache", "skipped", words=s.word_count,
+                                     reason="cached script too short for the requested length")
+                    s = None
+                s = s or scriptwriter.run(self.ctx, plan, facts, feedback)
                 self.cache.put("script", s.model_dump(mode="json"), self.job.id)
             self.job.write_json("script.json", s)
             self.job.write_text("script.md", s.to_markdown())
@@ -222,11 +236,14 @@ class Pipeline:
             else:
                 name = f"storyboard_{self.brief.mode}"
                 cached = self._from_cache(name, "storyboarding")
-                if cached and cached.get("script_fp") == fingerprint(script):
+                # a storyboard from an older storyboard prompt (or picker) is made again, not reused
+                if cached and cached.get("script_fp") == fingerprint(script) \
+                        and cached.get("prompt_version") == storyboarder.PROMPT_VERSION:
                     sb = Storyboard.model_validate(cached["storyboard"])
                 else:
                     sb = storyboarder.run(self.ctx, plan, script, facts)
-                self.cache.put(name, {"script_fp": fingerprint(script), "storyboard": sb.model_dump(mode="json")},
+                self.cache.put(name, {"script_fp": fingerprint(script), "prompt_version": storyboarder.PROMPT_VERSION,
+                                      "storyboard": sb.model_dump(mode="json")},
                                self.job.id)
             self.job.write_json("storyboard.json", sb)
             self.job.log.log("storyboarding", "storyboarder", "ok", origin=sb.origin, scenes=len(sb.scenes),
@@ -238,20 +255,29 @@ class Pipeline:
     def assets_and_audio(self, script: Script, storyboard: Storyboard) -> AssetManifest:
         prof = editor.output_profile(self.ctx)
         # TTS first: everything else is timed from the measured narration.
-        tts_fp = fingerprint(script, self.settings.tts_provider, self.ctx.voice, self.ctx.base_rate,
+        tts_fp = fingerprint(script, self.ctx.tts_provider, self.ctx.voice, self.ctx.base_rate,
                              self.brief.narration_audio)
 
         def tts_fn():
             segs = asset_generator.synthesize_segments(self.ctx, script)
+            first = editor.compute_layout(segs).total_s
             fit = self._fit_rate(segs)
-            if fit:  # nudge the pace (at most 15 points either way) so the narration fits the allowed length
+            if fit:  # nudge the pace (at most 15 points either way) so the narration fits the length window
                 self.ctx.rate_override, why = fit
                 self.job.log.log("tts", "pacing", "adjusted", rate=self.ctx.rate_override, reason=why)
                 self.ctx.notes.append(f"Narration pace set to {self.ctx.rate_override}: {why}.")
                 segs = asset_generator.synthesize_segments(self.ctx, script)
+            pause = self._fit_pauses(segs)
+            if pause:  # still short: slightly longer pauses between sentences
+                segs = asset_generator.add_pauses(self.ctx, segs, pause)
+            self.job.log.log("tts", "pacing", "length", first_s=round(first, 2),
+                             final_s=round(editor.compute_layout(segs).total_s, 2),
+                             window=list(length_window(self.brief.duration_s)), rate=self.ctx.tts_rate,
+                             extra_pause_s=pause)
             narration = asset_generator.assemble_narration(self.ctx, segs, editor.SEGMENT_GAP_S)
             self.job.write_json("assets/tts.json", {"segments": [s.model_dump() for s in segs],
-                                                    "narration": str(narration)})
+                                                    "narration": str(narration), "rate": self.ctx.tts_rate,
+                                                    "extra_pause_s": pause})
             return segs, narration
 
         def tts_load():
@@ -312,22 +338,72 @@ class Pipeline:
         return manifest
 
     def _fit_rate(self, segs) -> tuple[str, str] | None:
-        """A new speaking rate when the narration at the chosen speed would land outside 30-60 s (or well past
-        the target): faster if too long, slower if too short. Moves at most 15 points from the chosen speed."""
+        """A new speaking rate when the video would land outside its length window (length_window: within 3 s of
+        the request, inside 30-60 s): faster if too long; slower if too short by more than longer pauses can
+        make up. Aims at the middle of the window and moves at most MAX_RATE_SHIFT points from the chosen speed,
+        never below -30%. Speech time scales with 1 / (1 + rate), and Chatterbox reuses its takes, so one
+        correction lands where it was aimed."""
         if self.brief.dev_short or self.brief.narration_audio:
             return None
-        from schemas.brief import PROD_MIN_S
-        speech = editor.compute_layout(segs).total_s
-        limit = min(60.0, self.brief.duration_s * 1.1)
-        floor = PROD_MIN_S + 1.0  # the critic fails anything under 30 s
-        base = self.ctx.speed_pct
-        if speech > limit:
-            need = int((speech / limit - 1) * 100) + 2
-            return f"{min(base + need, base + 15):+d}%", "narration was longer than the target"
-        if speech < floor:
-            need = int((floor / speech - 1) * 100) + 2
-            return f"{max(base - need, base - 15, -30):+d}%", "narration was shorter than 30 seconds"
-        return None
+        lo, hi = length_window(self.brief.duration_s)
+        aim = (lo + hi) / 2
+        total = editor.compute_layout(segs).total_s
+        speech = sum(s.duration_s for s in segs)
+        fixed = total - speech  # pauses between chunks and the closing tail
+        cur, base = rate_pct(self.ctx.tts_rate), self.ctx.speed_pct
+        if total > hi - LENGTH_MARGIN_S:
+            new = round((1 + cur / 100) * speech / (aim - fixed) * 100 - 100)
+            why = "narration was longer than the target"
+        elif total < lo + LENGTH_MARGIN_S:
+            room = MAX_EXTRA_PAUSE_S * max(0, len(segs) - 1)  # what longer pauses can add without slowing down
+            if total + room >= aim:
+                return None
+            new = int((1 + cur / 100) * speech / (aim - fixed - room) * 100 - 100)
+            why = f"narration was shorter than the requested {self.brief.duration_s:.0f} seconds"
+        else:
+            return None
+        new = max(base - MAX_RATE_SHIFT, -30, min(base + MAX_RATE_SHIFT, new))
+        return (f"{new:+d}%", why) if new != cur else None
+
+    def _fit_pauses(self, segs) -> float:
+        """Extra seconds of pause after each chunk (at most MAX_EXTRA_PAUSE_S) that bring a short narration up to
+        the middle of its length window; 0 when it is not short."""
+        if self.brief.dev_short or self.brief.narration_audio or len(segs) < 2:
+            return 0.0
+        lo, hi = length_window(self.brief.duration_s)
+        total = editor.compute_layout(segs).total_s
+        if total >= lo + LENGTH_MARGIN_S:
+            return 0.0
+        return round(min(MAX_EXTRA_PAUSE_S, ((lo + hi) / 2 - total) / (len(segs) - 1)), 3)
+
+    def _length_miss(self, script: Script, manifest: AssetManifest) -> list[str] | None:
+        """Feedback for one script rewrite when even the pace and pause limits leave the video outside its length
+        window (the script is far too short or long); None when it fits. Sets the rewrite's word target."""
+        if self.brief.dev_short or self.brief.narration_audio or not self.ctx.llm_enabled():
+            return None
+        if self.job.state.get("length_rewrites", 0) >= LENGTH_REWRITES:
+            return None
+        segs = manifest.segments
+        lo, hi = length_window(self.brief.duration_s)
+        total = editor.compute_layout(segs).total_s
+        if lo <= total <= hi:
+            return None
+        rate = rate_pct(self.job.read_json("assets/tts.json").get("rate", self.ctx.tts_rate)) \
+            if self.job.exists("assets/tts.json") else rate_pct(self.ctx.tts_rate)
+        pause = self.job.read_json("assets/tts.json").get("extra_pause_s", 0) if self.job.exists("assets/tts.json") else 0
+        speech = sum(s.duration_s for s in segs) - pause * (len(segs) - 1)
+        # words per second at the chosen speed, measured on this narration
+        wps = script.word_count / speech * (1 + self.ctx.speed_pct / 100) / (1 + rate / 100)
+        fixed = editor.SEGMENT_GAP_S * (len(segs) - 1) + TAIL_S
+        words = max(12, round(wps * ((lo + hi) / 2 - fixed)))
+        self.ctx.words_target = words
+        self.job.set(words_target=words, length_rewrites=self.job.state.get("length_rewrites", 0) + 1)
+        self.job.log.log("tts", "pacing", "rewrite", final_s=round(total, 2), window=[lo, hi],
+                         words=script.word_count, words_target=words)
+        self.ctx.notes.append(f"Script rewritten for length: {script.word_count} words ran {total:.1f} s, outside "
+                              f"{lo:.0f}-{hi:.0f} s even after pacing; asked for about {words} words.")
+        return [f"length: the narration has {script.word_count} words and runs {total:.0f} seconds, but the video "
+                f"must be {lo:.0f}-{hi:.0f} seconds: write about {words} words"]
 
     def _write_asset_csv(self, manifest: AssetManifest) -> None:
         import csv
@@ -382,6 +458,7 @@ class Pipeline:
     # ---------- main ----------
     def run(self) -> QAReport:
         job = self.job
+        gpu.use(self.settings.gpu)
         job.set(status="running")
         feedback: list[str] | None = job.state.get("feedback")
         repairs = job.state.get("repairs", 0)
@@ -392,6 +469,12 @@ class Pipeline:
                 script = self.script(plan, facts, feedback)
                 storyboard = self.storyboard(plan, script, facts)
                 manifest = self.assets_and_audio(script, storyboard)
+                fix = self._length_miss(script, manifest)
+                if fix:  # far off the requested length even after pacing: write the script again, once
+                    feedback = fix
+                    job.set(feedback=feedback)
+                    job.invalidate_from("scripting")
+                    continue
                 props, _ = self.edit_and_render(script, storyboard, manifest)
                 report = self.qa(script, storyboard, facts, manifest, props, repairs)
                 route = self._route(report)

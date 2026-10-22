@@ -3,18 +3,21 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from agents.base import AgentContext, ask_llm, brief_summary, words_budget
+from agents.base import AgentContext, ask_llm, brief_summary
 from schemas.artifacts import Plan
 
-PROMPT_VERSION = "planner/v4"
+PROMPT_VERSION = "planner/v5"
 
 SYSTEM = """You are the Planner agent of AgentReel, a short-form video generator.
 Plan ONE video for the brief. Adapt to the brief: do not reuse a generic template.
 Rules:
-- OG mode: motion-graphics explainer; you may reserve 0-2 beats for Manim diagrams
-  (process, flow, timeline, chart from supplied numbers only, step-by-step equations for math,
-  chemical reactions for chemistry, sorting/searching for algorithms, an agent loop for agentic AI, an
-  attack-and-defence flow for cybersecurity, function graphs, line and pie charts from supplied numbers, network graphs). Topics like these should use them.
+- OG mode: motion-graphics explainer; reserve 2-3 beats for Manim animations (fewer only for very short
+  videos). The Storyboarder picks from a large catalog: cause chains, comparisons, pros and cons, myths vs
+  facts, rankings, roadmaps, decision trees, cycles, pyramids, mind maps, charts from supplied numbers,
+  equations, function graphs, chemical reactions, algorithms, networks, AI agent loops, cyber attacks and
+  3D scenes (atoms, DNA, molecules, globes, galaxies, waves, layers, podiums, carousels). Describe each beat
+  by the idea it shows (e.g. "chain of causes behind the 2008 crash"), not a visual style, and make the
+  beats different kinds of idea so the video does not repeat one diagram type.
 - minecraft/subway modes: narration-driven over gameplay; keep the structure simple and fast.
 - research_required is true for factual, promotional or awareness content.
 - Return ONLY a JSON object with the requested keys."""
@@ -102,13 +105,13 @@ def run(ctx: AgentContext) -> Plan:
     data = data or local_plan(ctx)
     if b.mode != "og":
         data.manim_scenes = []
-    words = words_budget(b.duration_s, b.mode, ctx.speed_pct)
+    words = ctx.word_budget
     return Plan(goal=data.goal, audience=b.audience, tone=b.tone, content_type=b.content_type, mode=b.mode,
                 narrative_structure=data.narrative_structure, target_duration_s=b.duration_s,
                 scene_count=max(2, min(data.scene_count, 12)),
                 research_required=data.research_required or b.is_factual,
                 research_questions=data.research_questions, visual_strategy=data.visual_strategy,
-                manim_scenes=data.manim_scenes[:2], needed_assets=data.needed_assets,
+                manim_scenes=data.manim_scenes[:3], needed_assets=data.needed_assets,
                 estimated_narration_words=words,
                 estimated_api_calls=0 if ctx.mode == "LOCAL_ONLY" else 5,
                 success_criteria=data.success_criteria, origin=origin)

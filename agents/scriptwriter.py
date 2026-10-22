@@ -5,19 +5,20 @@ import re
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from agents.base import AgentContext, ask_llm, brief_summary, words_budget
+from agents.base import AgentContext, ask_llm, brief_summary
 from core.mathtext import latex_to_unicode
 from retrieval.index import STOP
 from schemas.artifacts import Facts, Plan, Script, ScriptSegment
 
-PROMPT_VERSION = "scriptwriter/v3"
+PROMPT_VERSION = "scriptwriter/v4"
 
 SYSTEM_OG = """You are the Scriptwriter agent for a polished motion-graphics explainer.
 Write narration with a strong opening, a clear explanation, structure, and a useful close or CTA."""
 SYSTEM_BRAINROT = """You are the Scriptwriter agent for a fast, narration-driven short over gameplay footage.
 Open with a hook, keep sentences short and conversational, allow humor and suspense, and do not force slang."""
 RULES = """Rules:
-- Total narration must be close to {words} words (it must fit {seconds:.0f} seconds at a natural pace).
+- Total narration must be {min_words}-{max_words} words, about {words} (it must fill {seconds:.0f} seconds at a natural
+  pace). Shorter scripts make the video too short, so write about {n_segments} segments and count the words.
 - Split narration into segments of 6-22 words, one or two short sentences each.
 - Factual content: every factual statement must come from the SUPPORTED FACTS list and cite its fact_ids.
   Never add numbers, statistics, names or claims that are not in that list. If facts are thin, stay general.
@@ -31,6 +32,18 @@ RULES = """Rules:
 - Respect must_include and must_avoid.
 - highlights: 1-2 important words from that segment's own text.
 Return ONLY JSON: {{"title": "...", "segments": [{{"text": "...", "beat": "...", "fact_ids": [], "highlights": []}}], "cta": "..."}}"""
+
+
+# a script under this share of the word budget makes a noticeably short video, so it is sent back to the LLM.
+# Smaller shortfalls are made up after TTS (slower pace, longer pauses), which costs no LLM calls.
+SHORT_RATIO = 0.85
+# Retries rarely help: Gemini Flash(-Lite) told the same count writes about the same length again (job
+# og-20261021-155800 wrote 97, 97 and 98 words for 115), so one retry, and the prompt asks for a little more.
+LENGTH_RETRIES = 1
+
+
+def is_short(issues: list[str]) -> bool:
+    return any(i.startswith("script has only") for i in issues)
 
 
 # an equation being worked: "2x + 3 = 11", "x equals 4"
@@ -95,7 +108,7 @@ def _sentence(s: str) -> str:
 
 def local_script(ctx: AgentContext, plan: Plan, facts: Facts) -> ScriptLLM:
     b = ctx.brief
-    budget = words_budget(b.duration_s, b.mode, ctx.speed_pct)
+    budget = ctx.word_budget
     topic = clean_topic(b.topic, b.audience).rstrip(".?! ")
     if len(topic) > 1 and topic[1:2].islower() and not b.topic.strip().endswith("?"):
         topic = topic[0].lower() + topic[1:]  # "How rainbows form" -> "how rainbows form" mid-sentence
@@ -145,12 +158,14 @@ def check_script(script: Script, facts: Facts, ctx: AgentContext) -> list[str]:
     """Deterministic checks shared by the scriptwriter and the critic."""
     issues = []
     b = ctx.brief
-    budget = words_budget(b.duration_s, b.mode, ctx.speed_pct)
+    budget = ctx.word_budget
     wc = script.word_count
     if wc > budget * 1.25:
         issues.append(f"script has {wc} words, budget is about {budget}")
-    if wc < budget * 0.5 and not b.dev_short:
-        issues.append(f"script has only {wc} words; target about {budget}")
+    if wc < budget * SHORT_RATIO and not b.dev_short:
+        issues.append(f"script has only {wc} words but must have about {budget} to fill {b.duration_s:.0f} seconds: "
+                      f"add about {budget - wc} words (more segments with further explanation, examples or "
+                      f"context from the facts)")
     known = {f.fact_id: f for f in facts.facts}
     # numbers the person wrote in the brief are theirs to use (e.g. the equation they asked about)
     supported_text = " ".join([f.evidence + " " + f.claim for f in facts.supported()] + [b.topic, *b.must_include])
@@ -193,25 +208,38 @@ def remove_unsupported(script: Script, issues: list[str]) -> Script:
 
 def run(ctx: AgentContext, plan: Plan, facts: Facts, feedback: list[str] | None = None) -> Script:
     b = ctx.brief
-    words = words_budget(b.duration_s, b.mode, ctx.speed_pct)
+    words = ctx.word_budget
     fact_lines = "\n".join(f"- {f.fact_id} [{f.status}]: {f.claim}" for f in facts.facts) or "(none)"
     user = (f"Brief:\n{brief_summary(b)}\n\nPlan beats: {plan.narrative_structure}\n\nSUPPORTED FACTS (only "
             f"'supported' and 'user_provided' may be stated):\n{fact_lines}\n\nResearch limitations: "
             f"{facts.limitations}\n")
     if feedback:
         user += "\nFix these problems from the previous draft:\n- " + "\n- ".join(feedback)
-    system = (SYSTEM_OG if b.mode == "og" else SYSTEM_BRAINROT) + "\n" + RULES.format(words=words,
-                                                                                         seconds=b.duration_s)
+    system = (SYSTEM_OG if b.mode == "og" else SYSTEM_BRAINROT) + "\n" + RULES.format(
+        words=round(words * 1.05), min_words=words, max_words=int(words * 1.15), n_segments=max(3, round(words / 15)),
+        seconds=b.duration_s)
     data = ask_llm(ctx, "scripting", system, user, ScriptLLM, PROMPT_VERSION, temperature=0.8, max_tokens=2500)
     script = to_script(data, "llm") if data else to_script(local_script(ctx, plan, facts), "local")
     issues = check_script(script, facts, ctx)
-    if issues and data:
-        ctx.job.log.log("scripting", "validator", "issues", issues=issues)
+    # Retry while the draft has problems. A draft that is only too short gets up to LENGTH_RETRIES more tries,
+    # each told its word count; the longest acceptable draft is kept, since short scripts give short videos.
+    tries = 0
+    while issues and data and tries < (LENGTH_RETRIES if is_short(issues) else 1):
+        tries += 1
+        ctx.job.log.log("scripting", "validator", "issues", issues=issues, attempt=tries)
         retry = ask_llm(ctx, "scripting", system, user + "\nYour draft had problems:\n- " + "\n- ".join(issues),
                         ScriptLLM, PROMPT_VERSION, temperature=0.5, max_tokens=2500)
-        if retry:
-            script = to_script(retry, "llm")
-            issues = check_script(script, facts, ctx)
+        if not retry:
+            break
+        cand = to_script(retry, "llm")
+        cand_issues = check_script(cand, facts, ctx)
+        only_length = all(i.startswith("script has only") for i in issues)
+        cand_ok = all(i.startswith("script has only") for i in cand_issues)
+        if not only_length or (cand_ok and cand.word_count > script.word_count):
+            script, issues = cand, cand_issues
+    if is_short(issues):
+        ctx.job.log.log("scripting", "validator", "short", words=script.word_count, budget=words,
+                        note="narration pace will be slowed toward the requested length")
     if any("states the number" in i or "unsupported fact" in i or "unknown fact" in i for i in issues):
         script = remove_unsupported(script, issues)
     if script.word_count > words * 1.25:  # trim from the end, keeping the closing line

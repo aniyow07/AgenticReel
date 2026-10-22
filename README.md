@@ -22,7 +22,7 @@ Python orchestrates everything. See [docs/architecture.png](docs/architecture.pn
 ## 1. Setup (Windows, tested)
 
 Tested on Windows 11 with Python 3.12.5, Node 22.20, npm 11.11, FFmpeg/FFprobe 9.0 (gyan.dev build),
-Remotion 4.0.531 and Manim CE 0.22.0. Python 3.11+ should work. No Docker, GPU or paid API is needed.
+Remotion 4.0.531 and Manim CE 0.22.0. Python 3.11+ should work. No Docker or paid API is needed; an NVIDIA GPU makes the local voice fast.
 
 ```powershell
 git clone <your repo url> AgentReel
@@ -43,6 +43,26 @@ Minecraft and Subway styles are disabled in the app; Motion graphics works out o
 
 FFmpeg and Node.js must be on `PATH`. Remotion downloads its headless Chrome on the first render.
 LaTeX is **not** required (Manim templates use plain `Text`).
+
+**Voice (Chatterbox-Turbo, local).** Narration uses Resemble AI's Chatterbox-Turbo on the GPU, in its own
+environment `.venv-tts` (it needs a newer PyTorch than the main app). Tested on an RTX 5050 (8 GB): about
+2.9 GB of GPU memory, roughly 3x faster than real time, about 25 s to load on the first clip after a start.
+
+```powershell
+uv venv .venv-tts --python 3.12
+uv pip install --python .venv-tts\Scripts\python.exe torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+"torch==2.8.0+cu128`ntorchaudio==2.8.0+cu128" | Out-File -Encoding ascii tts-override.txt
+uv pip install --python .venv-tts\Scripts\python.exe chatterbox-tts==0.1.7 faster-whisper --override tts-override.txt --extra-index-url https://download.pytorch.org/whl/cu128 --index-strategy unsafe-best-match
+# model: every file of huggingface.co/ResembleAI/chatterbox-turbo except s3gen.safetensors, into models\chatterbox-turbo
+```
+
+The override keeps the CUDA 12.8 PyTorch (RTX 50 cards need it; chatterbox-tts pins 2.6). Word timings for the
+captions come from Whisper `small` (faster-whisper, from the Hugging Face cache) run on the generated audio.
+Voices are the model's built-in voice plus any reference clips in `assets/voices` (see its README). Speed
+(`TTS_RATE`, `--voice-speed`) is applied afterwards with FFmpeg `atempo`. Paralinguistic tags such as `[laugh]`
+or `[sigh]` in the script are performed and never shown in captions. The Microsoft Edge voices are still
+available as **Classic** (needs internet): each video picks Natural or Classic in the app (Create and "Try another
+style") or with `--tts-engine chatterbox|edge`; `TTS_ENGINE` in `.env` sets the default.
 
 ## 2. Run
 
@@ -100,13 +120,14 @@ reuses the existing script/storyboard/narration.
 | `--local-only` | `LOCAL_ONLY`: no LLM requests at all |
 | `--ai-required` | `AI_REQUIRED`: fail clearly if the AI provider is unavailable |
 | `--provider gemini\|openrouter` | which AI provider to use for this run |
-| `--voice NAME` | Edge TTS voice, e.g. `en-IN-PrabhatNeural` (`--list-voices` lists them) |
+| `--voice NAME` | voice id, e.g. `default` (`--list-voices` lists them) |
 | `--voice-speed N` | speaking speed in percent (default +10 from `TTS_RATE`); the script length follows it |
 | `--dev-short` | short test render at 540×960 (allowed below 30 s; never labelled as production) |
 | `--resume JOB_ID` | rerun only stages whose inputs changed or that did not finish |
 | `--rerender JOB_ID` | new caption style, same content |
 | `--output-dir PATH` | where job folders go (default `outputs/`) |
 | `--script-json / --storyboard-json` | supply your own validated script/storyboard |
+| `--gpu auto\|on\|off` | NVENC video encoding and Chrome's GPU backend in Remotion (default `AGENTREEL_GPU`, else `auto`: used when an NVIDIA encoder works, CPU otherwise; a failed GPU step is retried on the CPU). `web.py` takes the same flag |
 
 Exit code is 0 when technical QA passes, 3 when it fails, 2 for an invalid brief.
 
@@ -162,8 +183,8 @@ Every field is validated (Pydantic, `extra="forbid"`) before a job starts.
   Manim templates; both sides validate (Pydantic in Python, Zod in Remotion). Subprocesses use argument
   lists; paths are sanitised; uploads are type- and size-checked (50 MB).
 * **Timing from measured audio.** Narration is synthesised per chunk; each chunk's real duration is
-  measured with ffprobe. Captions use Edge TTS word boundaries (phrase captions built from real word
-  timings). If a backend gives no word timings, a chunk's *measured* duration is shared among its
+  measured with ffprobe. Captions use real word timings (Whisper on the generated Chatterbox audio; Edge word boundaries
+  when `TTS_ENGINE=edge`). If a backend gives no word timings, a chunk's *measured* duration is shared among its
   phrases (flagged in QA); the total video length is never simply split evenly.
 * **Remotion rendering.** Media is hard-linked into the job's `public/` folder and passed with
   `--public-dir`; compositions use `staticFile()`; props go in a JSON file (`--props=`).
@@ -280,8 +301,8 @@ renderer unit tests is labelled as such and is never counted as a gameplay test.
 * Without an LLM, scripts come from simple templates. They are honest but generic; for good results
   offline, supply sources and/or your own `--script-json`.
 * Gameplay permission is `needs_review` for both bundled clips (see above).
-* Edge TTS needs internet; offline, the Windows SAPI voice is used (no word timings, so captions are
-  aligned within each measured chunk instead).
+* Chatterbox-Turbo is English only and needs an NVIDIA GPU to be quick (without one it runs on the much slower CPU).
+  With `TTS_ENGINE=edge`, Edge TTS needs internet; offline, the Windows SAPI voice is used (no word timings).
 * Word-by-word karaoke highlighting is not implemented; captions are short phrases timed from real
   word boundaries, with keyword highlights.
 * Online research (Wikipedia) is optional and off by default; it needs `AGENTREEL_CONTACT` for the
