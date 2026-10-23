@@ -64,3 +64,6 @@ models/
 cloudflare.exe
 cloudflared.exe
 cloudflared
+
+# --- share.bat: current tunnel link ---
+share_link.txt
