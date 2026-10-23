@@ -112,7 +112,6 @@ cd remotion; npx vitest run; npx tsc --noEmit
 - Free AI tiers run out (OpenRouter about 50 requests a day, Gemini's main model about 20), and the backup
   model writes shorter scripts.
 - Without an LLM, scripts are honest but generic; supply sources or your own `--script-json` for better results.
-- Both bundled gameplay clips are `needs_review` for licensing. Replace them before publishing
   ([details](docs/reference.md#gameplay-footage)).
-- Chatterbox-Turbo is English only and slow without an NVIDIA GPU.
+- Chatterbox-Turbo is English only and slow without an  GPU.
 - Wikipedia research is off by default (`ONLINE_RESEARCH=true`, plus `AGENTREEL_CONTACT`).
