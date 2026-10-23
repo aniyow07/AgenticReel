@@ -1,7 +1,7 @@
 %% AgentReel architecture (docs/architecture.png is drawn from the same graph by scripts/draw_architecture.py)
 flowchart TD
     subgraph Start["How you start it"]
-        WEB["Web app: web.py<br/>webui/ (ES modules) + webapp/ local API"]
+        WEB["Web app: web.py<br/>webui/ (ES modules) + webapp/ local API<br/>jobs · uploads · voices + previews · library"]
         CLI["CLI: run.py<br/>--topic/--brief --provider --seed --resume --rerender --fresh-script"]
         ST["Streamlit: app.py (older UI)"]
     end
@@ -13,11 +13,11 @@ flowchart TD
     subgraph Agents["Agents (agents/*.py)"]
         P["1 Planner<br/>plan.json"] --> R["2 Researcher (RAG)<br/>facts.json"]
         R --> S["3 Scriptwriter<br/>script.json"]
-        S --> B["4 Storyboarder<br/>storyboard.json"]
+        S --> B["4 Storyboarder<br/>storyboard.json · Manim templates picked from the catalog"]
         B --> A["5 Asset Generator<br/>assets/manifest.json + .csv"]
-        A --> TTS["Voice (TTS)<br/>Edge TTS · SAPI · supplied audio<br/>measured lengths + word timings"]
+        A --> TTS["Voice (TTS)<br/>Chatterbox-Turbo, local GPU (.venv-tts)<br/>Whisper word timings · measured lengths"]
         A --> VIS["Footage & music<br/>gameplay cut from the middle"]
-        A --> MAN["Manim: 17 trusted templates · 5 looks<br/>validated params, transparent WebM"]
+        A --> MAN["Manim: 46 trusted templates (topic + 15 general, 18 in 3D) · 5 looks<br/>validated params, transparent WebM"]
         TTS --> E["6 Editor<br/>render_props.json · captions.srt"]
         VIS --> E
         MAN --> E
@@ -38,14 +38,14 @@ flowchart TD
     C -. AI review .-> Providers
 
     subgraph Grounding["Grounding (retrieval/ + checks)"]
-        RAG["Ingest + BM25+ retrieval<br/>PDF · DOCX · TXT · MD, page numbers"]
+        RAG["Ingest + BM25+ retrieval<br/>PDF · DOCX · TXT · MD, page numbers<br/>Wikipedia research (optional, off by default)"]
         GR["Grounding checks<br/>numbers verbatim · unsupported text/links/contacts stripped"]
     end
     R --> RAG
     B --> GR
 
-    subgraph Render["Render (rendering/ + remotion/)"]
-        REM["Remotion<br/>OGVideo (12 backdrops) · Brainrot · Zod props"] --> FF["FFmpeg finish<br/>-14 LUFS · H.264/AAC · ffprobe"]
+    subgraph Render["Render (rendering/ + remotion/) · GPU auto"]
+        REM["Remotion<br/>OGVideo (12 backdrops) · Brainrot · Zod props · Chrome GPU (ANGLE)"] --> FF["FFmpeg finish<br/>NVENC on the GPU, else libx264 · AAC · -14 LUFS · ffprobe"]
         FF --> FIN["final.mp4 + captions.srt"]
     end
     E --> REM

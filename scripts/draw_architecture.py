@@ -8,16 +8,50 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
 W, H = 1800, 1780
-BG, CARD, TEXT, MUTED = "#0B1020", "#151C33", "#F5F7FF", "#A9B2D0"
-BLUE, AMBER, GREEN, PINK, VIOLET, TEAL = "#7C9CFF", "#FFB547", "#5BE38B", "#FF6B9A", "#A47CFF", "#4FD1C5"
-img = Image.new("RGB", (W, H), BG)
-d = ImageDraw.Draw(img)
+BG, CARD, TEXT, MUTED = "#FFFFFF", "#F6F8FC", "#141A2E", "#5A6380"
+BLUE, AMBER, GREEN, PINK, VIOLET, TEAL = "#3B5BDB", "#D97706", "#15803D", "#DB2777", "#7C3AED", "#0F8A80"
+S = 2  # layout is in 1800-wide units; the PNG is drawn S times larger so it stays sharp when zoomed
+img = Image.new("RGB", (W * S, H * S), BG)
+
+
+def _pts(xy):
+    if xy and isinstance(xy[0], (tuple, list)):
+        return [(x * S, y * S) for x, y in xy]
+    return [v * S for v in xy]
+
+
+class _Draw:
+    """ImageDraw with every coordinate, radius and line width multiplied by S."""
+
+    def __init__(self, im):
+        self.d = ImageDraw.Draw(im)
+
+    def rounded_rectangle(self, xy, r, width=1, **kw):
+        self.d.rounded_rectangle(_pts(xy), r * S, width=width * S, **kw)
+
+    def rectangle(self, xy, **kw):
+        self.d.rectangle(_pts(xy), **kw)
+
+    def line(self, xy, width=1, **kw):
+        self.d.line(_pts(xy), width=width * S, joint="curve", **kw)
+
+    def polygon(self, xy, **kw):
+        self.d.polygon(_pts(xy), **kw)
+
+    def text(self, xy, text, **kw):
+        self.d.text(_pts(xy), text, **kw)
+
+    def textlength(self, text, font):
+        return self.d.textlength(text, font=font) / S
+
+
+d = _Draw(img)
 
 
 def font(size, bold=False):
     for name in (("segoeuib.ttf" if bold else "segoeui.ttf"), "arial.ttf"):
         try:
-            return ImageFont.truetype(name, size)
+            return ImageFont.truetype(name, size * S)
         except OSError:
             continue
     return ImageFont.load_default()
@@ -84,12 +118,12 @@ def lane(src, lx, dst, color, label="", dy=0):
 
 
 d.text((W / 2, 46), "AgentReel architecture", font=FT, fill=TEXT, anchor="mm")
-d.text((W / 2, 86), "seven agents · schema-checked hand-offs · RAG grounding · critic repair loop · Manim + Remotion",
+d.text((W / 2, 86), "seven agents · schema-checked hand-offs · RAG grounding · critic repair loop · Manim + Remotion · local voice · GPU",
        font=FS, fill=MUTED, anchor="mm")
 
 # ---------------- entry points ----------------
 group(40, 130, 1720, 150, "How you start it", AMBER)
-box("web", 70, 160, 520, 96, "Web app  ·  web.py", "webui/ (ES modules)  <->  webapp/ local API\n/api/jobs · upload · version · resume · delete", AMBER)
+box("web", 70, 160, 520, 96, "Web app  ·  web.py", "webui/ (ES modules)  <->  webapp/ local API\njobs · uploads · voices + previews · library", AMBER)
 box("cli", 640, 160, 520, 96, "CLI  ·  run.py", "--topic / --brief · --provider · --seed\n--resume · --rerender · --fresh-script", AMBER)
 box("st", 1210, 160, 520, 96, "Streamlit  ·  app.py", "older UI over the same pipeline", AMBER)
 
@@ -102,11 +136,11 @@ ax, aw = 120, 560
 box("p", ax, 520, aw, 78, "1  Planner", "plan.json · scene count, Manim beats, research needs")
 box("r", ax, 640, aw, 78, "2  Researcher (RAG)", "facts.json · claim + source + page + evidence")
 box("s", ax, 760, aw, 78, "3  Scriptwriter", "script.json · lines cite fact_ids · word budget")
-box("b", ax, 880, aw, 78, "4  Storyboarder", "storyboard.json · visual + params + backdrop per scene")
+box("b", ax, 880, aw, 78, "4  Storyboarder", "storyboard.json · Manim templates picked from the catalog")
 box("a", ax, 1000, aw, 78, "5  Asset Generator", "assets/manifest.json + .csv (sources, licences)")
-box("tts", 60, 1110, 330, 96, "Voice (TTS)", "Edge TTS · SAPI · your audio\nmeasured lengths + word timings", TEAL)
+box("tts", 60, 1110, 330, 96, "Voice (TTS)", "Chatterbox-Turbo, local GPU\n.venv-tts · Whisper word timings", TEAL)
 box("vis", 405, 1110, 320, 96, "Footage & music", "gameplay cut from the middle\nlicence status in manifest", TEAL)
-box("man", 740, 1110, 330, 96, "Manim (17 templates)", "5 looks · transparent WebM\nparams validated, no code run", TEAL)
+box("man", 740, 1110, 330, 96, "Manim (46 templates)", "topic + 15 general · 18 in 3D\n5 looks · params validated", TEAL)
 box("e", ax, 1240, aw, 78, "6  Editor", "render_props.json · captions.json · captions.srt")
 box("c", ax, 1360, aw, 78, "7  Critic / QA", "qa_report.json · ~30 checks + AI review")
 
@@ -118,12 +152,12 @@ box("orr", RX, 650, RW, 110, "OpenRouter", "free models first -> fallbacks\nretr
 box("mode", RX, 780, RW, 140, "Execution mode", "AI_PREFERRED: fall back to local templates\nAI_REQUIRED: stop if the AI is unavailable\nLOCAL_ONLY: no API calls\nevery reply = JSON validated by Pydantic", VIOLET)
 
 group(1200, 990, 560, 280, "Grounding  (retrieval/ + checks)", GREEN)
-box("rag", RX, 1030, RW, 96, "Ingest + BM25+ retrieval", "PDF · DOCX · TXT · MD -> passages + page numbers\noptional Wikipedia (off by default)", GREEN)
+box("rag", RX, 1030, RW, 96, "Ingest + BM25+ retrieval", "PDF · DOCX · TXT · MD -> passages + page numbers\nWikipedia research (optional, off by default)", GREEN)
 box("gr", RX, 1146, RW, 96, "Grounding checks", "numbers must appear verbatim in evidence\nunsupported text, links, contacts stripped", GREEN)
 
-group(1200, 1310, 560, 380, "Render  (rendering/ + remotion/)", TEAL)
-box("rem", RX, 1350, RW, 96, "Remotion", "OGVideo (12 backdrops) · Brainrot videos\nZod-checked props · frame progress to UI", TEAL)
-box("ff", RX, 1466, RW, 96, "FFmpeg finish", "loudnorm -14 LUFS · H.264 / AAC · 30 fps\nsize cap · ffprobe validation", TEAL)
+group(1200, 1310, 560, 380, "Render  (rendering/ + remotion/)  ·  GPU auto", TEAL)
+box("rem", RX, 1350, RW, 96, "Remotion", "OGVideo (12 backdrops) · Brainrot videos\nZod-checked props · Chrome GPU (ANGLE)", TEAL)
+box("ff", RX, 1466, RW, 96, "FFmpeg finish", "NVENC on the GPU, else libx264 · AAC\n-14 LUFS · size cap · ffprobe validation", TEAL)
 box("fin", RX, 1582, RW, 86, "final.mp4 + captions.srt", "checked by the Critic before it is done", GREEN)
 
 group(40, 1530, 1120, 170, "Logs per job  (outputs/<job>/logs)", MUTED)
