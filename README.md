@@ -1,3 +1,4 @@
+
 # AgentReel
 
 AgentReel turns any topic or brief into a finished short video. Seven AI agents plan, research, write,
@@ -20,12 +21,16 @@ Highlights:
 A step-by-step guide is in [docs/AgentReel_Guide.pdf](docs/AgentReel_Guide.pdf); flags, brief fields and
 internals are in [docs/reference.md](docs/reference.md).
 
-## Demo
+  ## Demo
 
 AgentReel made this 45-second video about itself from a short brief and its fact sheet
 ([docs/AgentReel_FactSheet.pdf](docs/AgentReel_FactSheet.pdf)). Click the image to play it (sound on).
 
-<a href="docs/demo.mp4"><img src="docs/demo_poster.jpg" alt="AgentReel demo video" width="270"></a>
+
+
+https://github.com/user-attachments/assets/67cd2118-6d25-49e4-90a5-e9fcbb28bc95
+
+
 
 ## Architecture
 
